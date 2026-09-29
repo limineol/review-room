@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   font-family: var(--font-sans, system-ui, sans-serif);
   color: var(--color-text-primary, light-dark(#242424, #ededed));
   background: var(--color-background-primary, light-dark(#fff, #212121));
@@ -10,8 +10,7 @@
 }
 body {
   margin: 0;
-  padding: 20px;
-  max-width: 1000px;
+  padding: 16px;
   margin-inline: auto;
 }
 button,
@@ -25,7 +24,7 @@ button {
   cursor: var(--cursor-interaction, pointer);
   border: 1px solid var(--color-border-primary, light-dark(#ddd, #444));
   background: transparent;
-  border-radius: 8px;
+  border-radius: var(--border-radius-md, 8px);
   padding: 8px 12px;
   white-space: nowrap;
 }
@@ -97,9 +96,6 @@ label {
 .pair > * {
   flex: 1;
   min-width: 0;
-}
-.intro {
-  padding: 20px 0 2px;
 }
 .section-label {
   justify-content: space-between;
@@ -274,4 +270,22 @@ label {
 .message-body th {
   border: 1px solid var(--color-border-primary, #555);
   padding: 6px;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+.checkpoint-details {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-secondary, #666);
+}
+.checkpoint-details span {
+  display: block;
+  padding-top: 8px;
+}
+summary {
+  cursor: var(--cursor-interaction, pointer);
 }

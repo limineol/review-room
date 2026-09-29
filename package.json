@@ -20,5 +20,5 @@
     "check": "tsc --noEmit",
     "test": "bun test"
   },
-  "version": "0.1.2"
+  "version": "0.1.3"
 }

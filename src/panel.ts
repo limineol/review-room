@@ -2,13 +2,14 @@ import {
   App,
   applyDocumentTheme,
   applyHostStyleVariables,
+  applyHostFonts,
 } from "@modelcontextprotocol/ext-apps";
 import { OpenAIExtensions } from "@openai/mcp-extensions/app";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { stateSchema, runSchema, type Run } from "./schema";
 
-const app = new App({ name: "Review Room", version: "0.1.2" });
+const app = new App({ name: "Review Room", version: "0.1.3" });
 const extensions = new OpenAIExtensions(app);
 let state: ReturnType<typeof stateSchema.parse> = { harnesses: [], runs: [] };
 let selected: string | undefined;
@@ -79,7 +80,7 @@ function render() {
   get("discussion").hidden = !run;
   get("subtitle").textContent = run
     ? `${run.config.checkpoint} · ${run.status}`
-    : "Independent minds. One discussion.";
+    : "New checkpoint";
   get("inventory").textContent = state.harnesses.length
     ? `Found ${state.harnesses.map((h) => h.name).join(", ")}. Codex and Claude Code can run reviews; other harnesses are discovery only.`
     : "No supported local CLIs found. Install and sign in to a harness first.";
@@ -207,6 +208,7 @@ function theme() {
   if (context?.theme) applyDocumentTheme(context.theme);
   if (context?.styles?.variables)
     applyHostStyleVariables(context.styles.variables);
+  if (context?.styles?.css?.fonts) applyHostFonts(context.styles.css.fonts);
 }
 app.addEventListener("hostcontextchanged", theme);
 get("refresh").onclick = () =>

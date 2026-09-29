@@ -11,8 +11,7 @@
   <body>
     <header>
       <div>
-        <h1>Review Room</h1>
-        <p id="subtitle">Independent minds. One discussion.</p>
+        <p id="subtitle">New checkpoint</p>
       </div>
       <button id="new" title="New checkpoint">＋</button>
     </header>
@@ -23,13 +22,6 @@
     </nav>
     <p id="error" role="alert"></p>
     <form id="setup">
-      <div class="intro">
-        <h2>A second opinion, with a conversation.</h2>
-        <p>
-          Choose who reviews this checkpoint. Each reviewer works independently,
-          then challenges the others’ findings.
-        </p>
-      </div>
       <label
         >Repository<input
           id="repo"
@@ -57,7 +49,10 @@
         <h2>Reviewers</h2>
         <button id="configure" type="button">Choose with chat ↗</button>
       </div>
-      <p id="inventory" class="muted">Discovering local harnesses…</p>
+      <details>
+        <summary class="muted">Installed harnesses</summary>
+        <p id="inventory" class="muted">Discovering local harnesses…</p>
+      </details>
       <div id="reviewers"></div>
       <button id="add" type="button" class="subtle">＋ Add reviewer</button>
       <label
@@ -79,7 +74,11 @@
     </form>
     <section id="discussion" hidden>
       <div class="review-toolbar">
-        <span id="checkpoint-info"></span><button id="stop">Stop</button
+        <details class="checkpoint-details">
+          <summary>Checkpoint details</summary>
+          <span id="checkpoint-info"></span>
+        </details>
+        <button id="stop">Stop</button
         ><button id="share">Send to chat ↗</button>
       </div>
       <div id="messages" role="log" aria-live="polite"></div>
