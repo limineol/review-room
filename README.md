@@ -1,31 +1,43 @@
 # Review Room
 
-A local Codex plugin for adversarial code review discussions. Discover installed coding CLIs, choose the exact harness and model for each reviewer, and start a review at a named checkpoint from a sidebar app or conversation panel.
+A native Codex plugin for agent-controlled adversarial reviews. The agent in your chat discovers enabled local models, writes review prompts, launches reviewers, discusses their findings, collects a Markdown artifact, and implements appropriate feedback within your task's scope.
 
-## Workflow
+The discussion panel shows progress and dialogue. **Request review** sends a request to the current chat agent. There is no review-configuration form or second chat composer in the panel.
 
-1. Open **Review discussion** from the sidebar or conversation panel.
-2. Enter the repository root, comparison revision, checkpoint name, and intended behavior.
-3. Choose two to four reviewers and their models. **Choose with chat** asks the current chat to help.
-4. Start the review. The first round is independent; later rounds exchange published findings and rebuttals.
-5. Add guidance for subsequent turns, stop a run, or send the discussion to the main chat.
+## Native settings
 
-The panel uses the host's theme and typography tokens. Review history is shared across this user's local panels and stored in `~/.local/share/review-room/reviews.sqlite`. No cloud backend or new API key is required. Provider charges and subscription limits follow the selected CLI accounts.
+Open the plugin's Settings to enable Codex and/or Claude Code and allow exact model IDs or CLI aliases. The agent chooses among these combinations. Discovery distinguishes installed executables, model suggestions, and configured permission; it does not promise account access.
 
-## Supported scope
+Settings also control maximum reviewers (1–4), reviewer turns per cycle (1–30), and seconds per turn (30–600). **Reuse reviewer sessions between cycles** defaults off. Within a discussion, sessions continue for follow-ups. Cross-cycle reuse, when enabled, is scoped to the same room, repository, reviewer name, harness, and model.
 
-- Detects Codex, Claude Code, OpenCode, Gemini CLI, Cursor Agent, Factory Droid, Devin, Grok Build, Antigravity, ForgeCode, Hermes, Pi, Oh My Pi, and Slate on PATH and common local binary directories.
-- Executes Codex and Claude Code. Other matching executable names are labeled unverified candidates; a name match may be an unrelated program.
-- Codex suggestions come from its local model cache. Claude suggestions are CLI aliases. These are not a claim of account access; custom model IDs are accepted and errors are visible.
-- Captures tracked changes against the selected commit plus untracked regular text files. `HEAD` reviews uncommitted work; choose another base to include commits. Git ignored files are excluded.
-- The review is limited to a frozen diff, at most 300 KB. It rejects unsupported untracked files rather than silently omitting them. Reviewers cannot inspect surrounding files or execute tests. Binary tracked changes appear only as Git's binary-change notice.
-- Two to four reviewers, one to three rounds, three-minute limit and 24,000-character output limit per reviewer turn. Responses appear when a turn completes. User messages reach later turns, not a turn already in progress.
-- Codex uses a read-only sandbox with shell tools, plugins and user configuration disabled. Claude uses safe mode, no tools, strict MCP configuration and noninteractive denied permissions. Each invocation uses a temporary empty working directory and stdin for the prompt.
-- Runs require the MCP process to stay alive. Graceful shutdown marks them interrupted; dead processes and expired 30-second heartbeat leases are detected when read. There is no automatic retry or model fallback.
+New installations start with no enabled reviewers. On Dani's installation, the previously authorized GPT-5.5/Codex and Opus/Claude combinations are seeded only if settings have never been saved.
+
+## Agent tools
+
+- `review_discover`: installed harnesses, enabled combinations, and limits.
+- `review_prompt_guide`: instructions for prompting and driving the loop.
+- `review_start`: start one or more background reviewers on actual repository files.
+- `review_send`: send agent follow-up questions to one reviewer or all.
+- `review_wait`: wait for published messages or a state change, using a cursor.
+- `review_collect`: close a ready cycle and save its Markdown discussion artifact.
+- `review_read` / `review_stop`: read status and messages, or cancel.
+- `open_review_room`: show the native panel, optionally selecting a run.
+
+A checkpoint means "review now," not a stored code snapshot. The reviewer reads the live repository; the prompt should specify files or the comparison ref. Avoid changing the same area during inspection, or ask for revalidation after changes.
+
+Reviewers return findings and optional addressed questions. Peer questions and their answers are routed by the service without the main agent having to copy every message. The main agent decides when to collect, implement fixes, and request another cycle. The turn budget prevents unbounded peer loops.
+
+## Runtime and safety
+
+Targets macOS/Linux with Bun 1.3.14 or later and signed-in local CLI accounts. Codex runs in a read-only sandbox with user configuration/rules and plugins disabled. Claude uses safe/restricted mode, Read/Grep/Glob only, and strict MCP configuration. Both can read actual code; neither is instructed to edit files or run tests. The main chat agent owns implementation and verification.
+
+The native panel applies host theme, font, and styling tokens. Published messages are rendered as sanitized Markdown; private model reasoning is not displayed. Artifact files and the SQLite database are local. Source is sent through the selected CLI accounts and remains subject to those providers' terms and limits.
+
+Jobs depend on the owning MCP process remaining alive. A stopped process interrupts its work. There is no idle-chat event wakeup: the agent actively uses `review_wait`. The event-protocol experiment remains in `spikes/events-probe` for reference and is no longer loaded by the production plugin.
+
+Data: `~/.local/share/review-room/agent-reviews.sqlite`. Artifacts: `~/.local/share/review-room/artifacts/`. Previous v0.1 history remains in `reviews.sqlite`; it is not migrated or deleted.
 
 ## Development
-
-This first release targets macOS and Linux. Requires Bun 1.3.14 or later and the selected signed-in CLIs. Dependencies are pinned exactly.
 
 ```sh
 bun install --frozen-lockfile
@@ -34,8 +46,4 @@ bun run build
 bun test
 ```
 
-The built `dist/server.js` and `dist/panel.html` are self-contained except for the Bun runtime and local CLIs. `mcp.json` is the portable manifest; `.codex-plugin/plugin.json` and `.mcp.json` provide Codex compatibility. No edits to global agent instructions are needed.
-
-## Privacy
-
-Discovery reads executable locations and the Codex model cache, not credential files. Starting a review sends the captured source to the explicitly selected providers using existing CLI authentication. Transcripts stay in the local database, which should be treated as source-sensitive. Sharing back to chat is a separate user action. The plugin does not contact production services or databases.
+The build bundles the MCP server and native panel. `mcp.json` is the portable manifest; `.mcp.json` and `.codex-plugin/plugin.json` provide Codex compatibility. Dependencies are exactly pinned. Zod is aligned with the Extensions SDK's supported version to keep native settings schemas type-compatible.

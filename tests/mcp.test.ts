@@ -4,87 +4,63 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { stateSchema, runSchema } from "../src/schema";
-import { Store } from "../src/store";
-
-test("built MCP server exposes both entrypoints, serves its bundled panel, and discovers harnesses", async () => {
+import { z } from "zod";
+import { settingsSchema } from "../src/schema";
+test("native settings, agent tools, and observational panel are discoverable", async () => {
   const dir = await mkdtemp(join(tmpdir(), "review-room-mcp-"));
-  const client = new Client({ name: "review-room-test", version: "1.0.0" });
+  const client = new Client({ name: "test", version: "1" });
   try {
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
+        (e): e is [string, string] => e[1] !== undefined,
       ),
     );
     await client.connect(
       new StdioClientTransport({
         command: process.execPath,
         args: ["dist/server.js"],
-        env: { ...env, REVIEW_ROOM_DB: join(dir, "state.sqlite") },
+        env: {
+          ...env,
+          REVIEW_ROOM_DB: join(dir, "state.sqlite"),
+          REVIEW_ROOM_DATA: dir,
+        },
         stderr: "pipe",
       }),
     );
-    const list = await client.listTools();
-    const opener = list.tools.find((t) => t.name === "open_review_room");
-    expect(opener?._meta?.["openai/ui"]).toEqual({
-      entrypoints: [{ type: "global" }, { type: "thread" }],
-    });
-    const opened = await client.callTool({
-      name: "open_review_room",
+    const tools = (await client.listTools()).tools;
+    expect(tools.map((t) => t.name)).toContain("review_wait");
+    expect(tools.map((t) => t.name)).not.toContain("start_checkpoint_review");
+    expect(
+      tools.find((t) => t.name === "open_review_room")?._meta?.["openai/ui"],
+    ).toEqual({ entrypoints: [{ type: "global" }, { type: "thread" }] });
+    const settings = await client.callTool({
+      name: "settings.read",
       arguments: {},
     });
-    expect(stateSchema.parse(opened.structuredContent).runs).toEqual([]);
-    const store = new Store(join(dir, "state.sqlite"));
-    const id = store.create(
-      {
-        repo: dir,
-        base: "HEAD",
-        checkpoint: "pagination",
-        task: "test",
-        rounds: 2,
-        reviewers: [
-          { name: "A", harness: "codex", model: "test" },
-          { name: "B", harness: "claude", model: "test" },
-        ],
-      },
-      "fingerprint",
-    );
-    for (let i = 0; i < 5; i++) store.message(id, "A", 1, `Message ${i}`);
-    store.status(id, "completed");
-    store.close();
-    const state = await client.callTool({
-      name: "review_room_state",
-      arguments: {},
+    const read = z
+      .object({ values: settingsSchema })
+      .parse(settings.structuredContent);
+    expect(read.values.reuseSessions).toBe(false);
+    await client.callTool({
+      name: "settings.update",
+      arguments: { set: { claudeEnabled: true, claudeModels: "opus" } },
     });
-    expect(
-      stateSchema.parse(state.structuredContent).runs[0]?.messages,
-    ).toEqual([]);
-    const page = await client.callTool({
-      name: "get_checkpoint_review",
-      arguments: { id },
-    });
-    const messages = runSchema.parse(page.structuredContent).messages;
-    expect(messages).toHaveLength(3);
-    const next = await client.callTool({
-      name: "get_checkpoint_review",
-      arguments: { id, after: messages.at(-1)!.id },
-    });
-    expect(
-      runSchema.parse(next.structuredContent).messages.map((m) => m.text),
-    ).toEqual(["Message 3", "Message 4"]);
+    const next = z
+      .object({ values: settingsSchema })
+      .parse(
+        (await client.callTool({ name: "settings.read", arguments: {} }))
+          .structuredContent,
+      );
+    expect(next.values.claudeModels).toBe("opus");
+    expect(next.values.reuseSessions).toBe(false);
     const resource = await client.readResource({
-      uri: "ui://review-room/panel",
+      uri: "ui://review-room/panel-v2",
     });
-    expect(resource.contents[0]?.mimeType).toBe("text/html;profile=mcp-app");
-    expect(
-      resource.contents[0] && "text" in resource.contents[0]
-        ? resource.contents[0].text
-        : "",
-    ).toContain("Start checkpoint review");
-    const html =
-      resource.contents[0] && "text" in resource.contents[0]
-        ? resource.contents[0].text
-        : "";
+    const first = resource.contents[0];
+    const html = first && "text" in first ? first.text : "";
+    expect(html).toContain("Request review");
+    expect(html).not.toContain('id="repo"');
+    expect(html).not.toContain('id="rounds"');
     const script = html.match(
       /<script type="module">([\s\S]*?)<\/script>/,
     )?.[1];

@@ -13,15 +13,18 @@
     "@openai/mcp-extensions": "0.1.0",
     "dompurify": "3.4.16",
     "marked": "18.0.14",
-    "zod": "4.6.5"
+    "zod": "4.4.3"
   },
   "scripts": {
     "build": "bun build.ts",
     "check": "tsc --noEmit && tsc --noEmit -p spikes/events-probe",
     "test": "bun test"
   },
-  "version": "0.1.5",
+  "version": "0.2.0",
   "workspaces": [
     "spikes/events-probe"
-  ]
+  ],
+  "overrides": {
+    "zod": "4.4.3"
+  }
 }

@@ -10,89 +10,34 @@
   </head>
   <body>
     <header>
-      <div>
-        <p id="subtitle">New checkpoint</p>
-      </div>
-      <button id="new" title="New checkpoint">＋</button>
+      <span id="status">No active review</span
+      ><button id="request" class="primary">Request review</button>
     </header>
     <nav>
       <select id="history" aria-label="Review history">
-        <option>New checkpoint</option></select
-      ><button id="refresh" title="Refresh">↻</button>
+        <option value="">Choose a review</option>
+      </select>
     </nav>
     <p id="error" role="alert"></p>
-    <form id="setup">
-      <label
-        >Repository<input
-          id="repo"
-          required
-          placeholder="/absolute/path/to/repository"
-      /></label>
-      <div class="pair">
-        <label
-          >Checkpoint<input
-            id="checkpoint"
-            required
-            placeholder="Before merging"
-            maxlength="120" /></label
-        ><label>Compare against<input id="base" required value="HEAD" /></label>
-      </div>
-      <label
-        >What should this change do?<textarea
-          id="task"
-          required
-          rows="3"
-          placeholder="Describe the intended behavior and concerns to investigate."
-        ></textarea>
-      </label>
-      <div class="section-label">
-        <h2>Reviewers</h2>
-        <button id="configure" type="button">Choose with chat ↗</button>
-      </div>
-      <details>
-        <summary class="muted">Installed harnesses</summary>
-        <p id="inventory" class="muted">Discovering local harnesses…</p>
-      </details>
-      <div id="reviewers"></div>
-      <button id="add" type="button" class="subtle">＋ Add reviewer</button>
-      <label
-        >Discussion rounds<select id="rounds">
-          <option value="2">2 — independent review + responses</option>
-          <option value="3">3 — add a final rebuttal</option>
-          <option value="1">1 — independent review only</option>
-        </select></label
-      >
-      <p class="muted">
-        Uses your selected local CLI accounts. Sends the frozen diff and
-        untracked text files to those providers. Model suggestions do not
-        confirm account access. Reviewers see only this snapshot and cannot run
-        tests.
+    <section id="empty">
+      <p>
+        Reviews run through the agent in your chat. Their progress and
+        discussion appear here.
       </p>
-      <button id="start" class="primary" type="submit">
-        Start checkpoint review
-      </button>
-    </form>
+      <p class="muted">
+        Allowed harnesses, models, and session reuse are configured in Review
+        Room’s plugin settings.
+      </p>
+    </section>
     <section id="discussion" hidden>
       <div class="review-toolbar">
-        <details class="checkpoint-details">
-          <summary>Checkpoint details</summary>
-          <span id="checkpoint-info"></span>
-        </details>
-        <button id="stop">Stop</button
-        ><button id="share">Send to chat ↗</button>
+        <span id="participants"></span><button id="stop">Stop review</button>
       </div>
       <div id="messages" role="log" aria-live="polite"></div>
-      <form id="composer">
-        <textarea
-          id="guidance"
-          required
-          rows="2"
-          placeholder="Ask the reviewers to examine something…"
-          aria-label="Message to reviewers"
-        ></textarea
-        ><button id="send" class="primary" type="submit">Send ↑</button>
-      </form>
-      <p id="delivery" class="muted"></p>
+      <p id="artifact" class="muted"></p>
+      <p class="muted">
+        Ask questions and request follow-ups in the main chat.
+      </p>
     </section>
     <script type="module">
       /*SCRIPT*/

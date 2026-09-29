@@ -9,7 +9,7 @@ async function fixture(source: string, expression: string) {
     const cli = join(dir, "claude");
     await writeFile(cli, `#!${process.execPath}\n${source}`);
     await chmod(cli, 0o700);
-    const script = `import {invoke} from ${JSON.stringify(join(import.meta.dir, "../src/runner.ts"))}; const reviewer={name:'test',harness:'claude',model:'test'}; ${expression}`;
+    const script = `import {invoke} from ${JSON.stringify(join(import.meta.dir, "../src/harness.ts"))}; const reviewer={name:'test',harness:'claude',model:'test',sessionId:null,state:'idle'}; const input={reviewer,repo:process.env.REVIEW_ROOM_TEST_DIR,prompt:'test',schemaFile:'/tmp/unused-schema',timeoutSeconds:30,activity:()=>{}}; ${expression}`;
     const processUnderTest = Bun.spawn([process.execPath, "-e", script], {
       env: {
         ...process.env,
@@ -36,10 +36,10 @@ async function fixture(source: string, expression: string) {
 
 test("output limit reports its real cause", async () => {
   const result = await fixture(
-    `process.stdout.write('x'.repeat(25_000)); setInterval(()=>{},1000);`,
-    `try { await invoke(reviewer,'test',new AbortController().signal); } catch(error) { console.log(error.message); }`,
+    `process.stdout.write('x'.repeat(2_000_001)); setInterval(()=>{},1000);`,
+    `try { await invoke({...input,signal:new AbortController().signal}); } catch(error) { console.log(error.message); }`,
   );
-  expect(result.output).toContain("24,000-character limit");
+  expect(result.output).toContain("2 MB");
 }, 10000);
 
 test.skipIf(process.platform === "win32")(
@@ -47,9 +47,9 @@ test.skipIf(process.platform === "win32")(
   async () => {
     const result = await fixture(
       `import {spawn} from 'node:child_process'; import {writeFileSync} from 'node:fs'; const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'}); writeFileSync(process.env.REVIEW_ROOM_TEST_DIR+'/child.pid',String(child.pid)); process.on('SIGTERM',()=>{}); setInterval(()=>{},1000);`,
-      `const control=new AbortController(); setTimeout(()=>control.abort(),700); try { await invoke(reviewer,'test',control.signal); } catch(error) { console.log(error.message); }`,
+      `const control=new AbortController(); setTimeout(()=>control.abort(),700); try { await invoke({...input,signal:control.signal}); } catch(error) { console.log(error.message); }`,
     );
-    expect(result.output).toContain("review cancelled");
+    expect(result.output).toContain("Review cancelled");
     expect(result.childPid).toBeDefined();
     await Bun.sleep(100);
     expect(() => process.kill(Number(result.childPid), 0)).toThrow();
