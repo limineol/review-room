@@ -37,6 +37,14 @@ const jobs = new Map<
 >();
 const calls: string[] = [];
 const children = new Set<ChildProcess>();
+let closing = false;
+let pendingWrite = Promise.resolve();
+function persist(name: string, value: unknown) {
+  const text = JSON.stringify(value);
+  const write = pendingWrite.then(() => writeFile(join(directory, name), text));
+  pendingWrite = write.catch(() => {});
+  return write;
+}
 function kill(child: ChildProcess) {
   if (!child.pid) return;
   try {
@@ -48,18 +56,17 @@ function kill(child: ChildProcess) {
 }
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () => {
+    closing = true;
     for (const child of children) kill(child);
     process.exit(0);
   });
 process.stdin.on("end", () => {
+  closing = true;
   for (const child of children) kill(child);
 });
 const trace = async (method: string) => {
   calls.push(method);
-  await writeFile(
-    join(directory, "protocol-methods.json"),
-    JSON.stringify(calls),
-  );
+  await persist("protocol-methods.json", calls);
 };
 
 async function review(runId: string, repo: string, prompt: string) {
@@ -68,6 +75,8 @@ async function review(runId: string, repo: string, prompt: string) {
   let body: string;
   try {
     const command = await executable("claude");
+    if (closing)
+      throw new Error("Host disconnected before the reviewer started.");
     if (!command) throw new Error("Claude Code not found.");
     body = await new Promise<string>((resolve, reject) => {
       const child = spawn(
@@ -142,10 +151,7 @@ async function review(runId: string, repo: string, prompt: string) {
     cursor: String(events.length + 1),
   };
   events.push(event);
-  await writeFile(
-    join(directory, "events.json"),
-    JSON.stringify(events, null, 2),
-  );
+  await persist("events.json", events);
   bus.emit("event", event);
 }
 

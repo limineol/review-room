@@ -9,7 +9,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { stateSchema, runSchema, type Run } from "./schema";
 
-const app = new App({ name: "Review Room", version: "0.1.4" });
+const app = new App({ name: "Review Room", version: "0.1.5" });
 const extensions = new OpenAIExtensions(app);
 let state: ReturnType<typeof stateSchema.parse> = { harnesses: [], runs: [] };
 let selected: string | undefined;

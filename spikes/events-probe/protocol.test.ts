@@ -113,6 +113,9 @@ test("modern MCP discovery, filtered push delivery, artifact, and cancellation",
     expect(event._meta["io.modelcontextprotocol/subscriptionId"]).toBeDefined();
     expect(await readFile(event.data.artifact, "utf8")).toContain("# Review");
     expect(received).toHaveLength(1);
+    expect(
+      JSON.parse(await readFile(join(root, "protocol-methods.json"), "utf8")),
+    ).toEqual(["events/list", "events/stream", "events/stream"]);
     stop.abort();
     await Promise.all(streams);
     const status = await client.callTool({
@@ -123,6 +126,62 @@ test("modern MCP discovery, filtered push delivery, artifact, and cancellation",
   } finally {
     stop.abort();
     await client.close();
+    await rm(root, { recursive: true, force: true });
+  }
+}, 10000);
+
+test("closing stdin during an asynchronous start cannot launch a reviewer", async () => {
+  const root = await mkdtemp(join(tmpdir(), "review-events-close-"));
+  const bin = join(root, "bin");
+  await mkdir(bin);
+  const marker = join(root, "spawned");
+  await writeFile(
+    join(bin, "claude"),
+    `#!${process.execPath}\nawait Bun.write(${JSON.stringify(marker)},'spawned');`,
+  );
+  await chmod(join(bin, "claude"), 0o700);
+  const proc = Bun.spawn(
+    [process.execPath, join(import.meta.dir, "../../dist/events-probe.js")],
+    {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        PATH: Array.from({ length: 100 }, (_, i) => join(root, `missing-${i}`))
+          .concat(bin)
+          .join(delimiter),
+        REVIEW_ROOM_PROBE_OUTPUT: root,
+      },
+    },
+  );
+  try {
+    proc.stdin.write(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "probe_start_review",
+          arguments: { repo: root, prompt: "test" },
+          _meta: {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              name: "test",
+              version: "1",
+            },
+            "io.modelcontextprotocol/clientCapabilities": {},
+          },
+        },
+      }) + "\n",
+    );
+    const response = await proc.stdout.getReader().read();
+    expect(new TextDecoder().decode(response.value)).toContain("running");
+    proc.stdin.end();
+    expect(await proc.exited).toBe(0);
+    expect(await Bun.file(marker).exists()).toBe(false);
+  } finally {
+    proc.kill();
     await rm(root, { recursive: true, force: true });
   }
 }, 10000);

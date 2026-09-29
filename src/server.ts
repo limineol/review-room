@@ -18,7 +18,7 @@ import { Store } from "./store";
 import { Reviews } from "./runner";
 import { startSchema } from "./schema";
 
-const server = new McpServer({ name: "review-room", version: "0.1.4" });
+const server = new McpServer({ name: "review-room", version: "0.1.5" });
 new OpenAIExtensions(server);
 const store = new Store(process.env.REVIEW_ROOM_DB);
 const reviews = new Reviews(store);

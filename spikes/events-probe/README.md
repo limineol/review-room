@@ -12,7 +12,7 @@ This isolated spike tests the revised architecture before changing the productio
 ## Run
 
 ```sh
-bun install --cwd spikes/events-probe --frozen-lockfile
+bun install --frozen-lockfile
 bun build spikes/events-probe/server.ts --target=bun --outfile=dist/events-probe.js
 bunx tsc --noEmit -p spikes/events-probe
 bun test spikes/events-probe/protocol.test.ts
@@ -25,7 +25,7 @@ The smoke test launches a real Opus review of a small fixture. Set `REVIEW_ROOM_
 
 The local smoke test received a real completion event and an artifact identifying the seeded empty-array defect. Automated coverage checks modern discovery, event catalog, run filters, request correlation, artifact creation, cancellation, and continued tool responsiveness.
 
-The installed Codex app-server protocol exposes experimental `mcpServer/event/stream/start`, `mcpServer/event/stream/stop`, and `mcpServer/event/stream/notification`. That proves an event-stream bridge exists, not that the desktop host automatically feeds its events into a chat agent or resumes an idle turn. That final host behavior still needs an in-app test.
+The installed Codex app-server protocol exposes experimental `mcpServer/event/stream/start`, `mcpServer/event/stream/stop`, and `mcpServer/event/stream/notification`. That proves an event-stream bridge exists, not that the desktop host automatically feeds its events into a chat agent or resumes an idle turn. A fresh native test chat confirmed that the probe tools are callable but found no event-subscription tool, event catalog, or subscription control in the plugin settings. Automatic same-chat continuation remains unproven; the missing host subscription entrypoint is the blocker.
 
 References:
 - https://developers.openai.com/plugins/build/mcp-events
