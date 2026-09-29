@@ -8,6 +8,14 @@ const server = await Bun.build({
 });
 if (!server.success)
   throw new AggregateError(server.logs, "Server build failed");
+const probe = await Bun.build({
+  entrypoints: ["spikes/events-probe/server.ts"],
+  outdir: "dist",
+  target: "bun",
+  naming: "events-probe.js",
+});
+if (!probe.success)
+  throw new AggregateError(probe.logs, "Event probe build failed");
 const panel = await Bun.build({
   entrypoints: ["src/panel.ts"],
   target: "browser",

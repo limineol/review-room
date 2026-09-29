@@ -1,0 +1,10 @@
+{
+  "name": "review-room-events-probe",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.2.0",
+    "@modelcontextprotocol/server": "2.2.0",
+    "zod": "4.6.5"
+  }
+}

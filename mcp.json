@@ -4,8 +4,18 @@
     "review-room": {
       "type": "stdio",
       "command": "bun",
-      "args": ["${PLUGIN_ROOT}/dist/server.js"],
+      "args": [
+        "${PLUGIN_ROOT}/dist/server.js"
+      ],
       "cwd": "${PLUGIN_ROOT}"
+    },
+    "review-room-events-probe": {
+      "command": "bun",
+      "args": [
+        "${PLUGIN_ROOT}/dist/events-probe.js"
+      ],
+      "cwd": "${PLUGIN_ROOT}",
+      "type": "stdio"
     }
   }
 }

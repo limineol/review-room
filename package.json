@@ -17,8 +17,11 @@
   },
   "scripts": {
     "build": "bun build.ts",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && tsc --noEmit -p spikes/events-probe",
     "test": "bun test"
   },
-  "version": "0.1.3"
+  "version": "0.1.4",
+  "workspaces": [
+    "spikes/events-probe"
+  ]
 }
