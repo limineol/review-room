@@ -12,19 +12,33 @@ import {
 } from "@openai/mcp-extensions/server";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
+import { platform, arch, release } from "node:os";
 import { discover } from "./discovery";
 import { Store } from "./store";
 import { Reviews } from "./runner";
 import { startSchema } from "./schema";
 
-const server = new McpServer({ name: "review-room", version: "0.1.0" });
+const server = new McpServer({ name: "review-room", version: "0.1.2" });
 new OpenAIExtensions(server);
 const store = new Store(process.env.REVIEW_ROOM_DB);
 const reviews = new Reviews(store);
 const uri = "ui://review-room/panel";
-const state = async () => ({ harnesses: await discover(), runs: store.list() });
+const panelHtml = await readFile(
+  new URL("./panel.html", import.meta.url),
+  "utf8",
+);
+const state = async () => ({
+  machine: { platform: platform(), architecture: arch(), release: release() },
+  harnesses: await discover(),
+  runs: store.list(),
+});
 const result = (data: object) => ({
-  content: [{ type: "text" as const, text: JSON.stringify(data) }],
+  content: [
+    {
+      type: "text" as const,
+      text: "Review Room result is available in structuredContent.",
+    },
+  ],
   structuredContent: { ...data },
 });
 registerAppResource(server, "review-room-panel", uri, {}, async () => ({
@@ -32,7 +46,7 @@ registerAppResource(server, "review-room-panel", uri, {}, async () => ({
     {
       uri,
       mimeType: RESOURCE_MIME_TYPE,
-      text: await readFile(new URL("./panel.html", import.meta.url), "utf8"),
+      text: panelHtml,
       _meta: {
         "openai/ui": {
           preferredDisplayMode: "fullscreen",
@@ -87,9 +101,36 @@ server.registerTool(
 server.registerTool(
   "get_checkpoint_review",
   {
-    description: "Read a review discussion and status.",
+    description:
+      "Read up to three discussion messages after a message ID, plus review status. Continue with nextAfter to read further pages.",
+    inputSchema: {
+      id: z.string().uuid(),
+      after: z.number().int().min(0).default(0),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ id, after }) => {
+    const run = store.get(id);
+    const messages = run.messages
+      .filter((message) => message.id > after)
+      .slice(0, 3);
+    return result({
+      ...run,
+      messages,
+      nextAfter: messages.at(-1)?.id ?? after,
+      hasMore: run.messages.some(
+        (message) => message.id > (messages.at(-1)?.id ?? after),
+      ),
+    });
+  },
+);
+server.registerTool(
+  "review_room_discussion",
+  {
+    description: "Load the complete discussion for the app view.",
     inputSchema: { id: z.string().uuid() },
     annotations: { readOnlyHint: true },
+    _meta: { ui: { visibility: ["app"] } },
   },
   async ({ id }) => result(store.get(id)),
 );
@@ -110,7 +151,7 @@ server.registerTool(
         "This review has ended. Start a new checkpoint to continue.",
       );
     store.message(id, "You", 0, text);
-    return result(store.get(id));
+    return result(store.get(id, false));
   },
 );
 server.registerTool(
@@ -120,7 +161,10 @@ server.registerTool(
     inputSchema: { id: z.string().uuid() },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
-  async ({ id }) => result(reviews.stop(id)),
+  async ({ id }) => {
+    reviews.stop(id);
+    return result(store.get(id, false));
+  },
 );
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () => {

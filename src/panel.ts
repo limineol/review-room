@@ -4,13 +4,21 @@ import {
   applyHostStyleVariables,
 } from "@modelcontextprotocol/ext-apps";
 import { OpenAIExtensions } from "@openai/mcp-extensions/app";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { stateSchema, runSchema, type Run } from "./schema";
 
-const app = new App({ name: "Review Room", version: "0.1.0" });
+const app = new App({ name: "Review Room", version: "0.1.2" });
 const extensions = new OpenAIExtensions(app);
 let state: ReturnType<typeof stateSchema.parse> = { harnesses: [], runs: [] };
 let selected: string | undefined;
+let selectedRun: Run | undefined;
+let nextReviewer = 3;
 let busy = false;
+let polling = false;
+let renderedRun: string | undefined;
+let renderedCount = -1;
+let historyKey = "";
 const get = <T extends HTMLElement>(id: string) => {
   const element = document.getElementById(id);
   if (!element) throw new Error(`Missing ${id}`);
@@ -44,13 +52,27 @@ async function action(fn: () => Promise<void>) {
   }
 }
 function active(): Run | undefined {
-  return state.runs.find((run) => run.id === selected);
+  return selectedRun?.id === selected ? selectedRun : undefined;
+}
+async function loadDiscussion() {
+  const id = selected;
+  if (!id) return;
+  const run = runSchema.parse(await tool("review_room_discussion", { id }));
+  if (selected === id) selectedRun = run;
 }
 function render() {
   const picker = get<HTMLSelectElement>("history");
-  picker.replaceChildren(new Option("New checkpoint", ""));
-  for (const run of state.runs)
-    picker.add(new Option(`${run.config.checkpoint} · ${run.status}`, run.id));
+  const nextHistoryKey = state.runs
+    .map((run) => `${run.id}:${run.status}`)
+    .join("|");
+  if (nextHistoryKey !== historyKey) {
+    picker.replaceChildren(new Option("New checkpoint", ""));
+    for (const run of state.runs)
+      picker.add(
+        new Option(`${run.config.checkpoint} · ${run.status}`, run.id),
+      );
+    historyKey = nextHistoryKey;
+  }
   picker.value = selected ?? "";
   const run = active();
   get("setup").hidden = !!run;
@@ -67,22 +89,58 @@ function render() {
     `${run.config.repo}\n${run.config.base.slice(0, 12)} · snapshot ${run.fingerprint.slice(0, 12)}`;
   const feed = get("messages");
   const follow = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 60;
-  feed.replaceChildren();
-  for (const item of run.messages) {
-    const article = document.createElement("article");
-    article.className =
-      item.speaker === "Review Room" ? "system-message" : "message";
-    const label = document.createElement("div");
-    label.className = "speaker";
-    const reviewer = run.config.reviewers.find((r) => r.name === item.speaker);
-    label.textContent = `${item.speaker}${reviewer ? ` · ${reviewer.harness} / ${reviewer.model}` : ""}${item.round ? ` · Round ${item.round}` : ""}`;
-    const body = document.createElement("div");
-    body.className = "message-body";
-    body.textContent = item.text;
-    article.append(label, body);
-    feed.append(article);
+  const changedRun = renderedRun !== run.id;
+  if (changedRun || renderedCount !== run.messages.length) {
+    if (changedRun) feed.replaceChildren();
+    for (const item of run.messages.slice(changedRun ? 0 : renderedCount)) {
+      const article = document.createElement("article");
+      article.className =
+        item.speaker === "Review Room" ? "system-message" : "message";
+      const label = document.createElement("div");
+      label.className = "speaker";
+      const reviewer = run.config.reviewers.find(
+        (r) => r.name === item.speaker,
+      );
+      label.textContent = `${item.speaker}${reviewer ? ` · ${reviewer.harness} / ${reviewer.model}` : ""}${item.round ? ` · Round ${item.round}` : ""}`;
+      const body = document.createElement("div");
+      body.className = "message-body";
+      body.innerHTML = DOMPurify.sanitize(
+        marked.parse(item.text, { async: false }),
+        {
+          ALLOWED_TAGS: [
+            "p",
+            "br",
+            "strong",
+            "em",
+            "code",
+            "pre",
+            "ul",
+            "ol",
+            "li",
+            "blockquote",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "table",
+            "thead",
+            "tbody",
+            "tr",
+            "th",
+            "td",
+            "hr",
+          ],
+          ALLOWED_ATTR: [],
+        },
+      );
+      article.append(label, body);
+      feed.append(article);
+    }
+    if (changedRun) feed.scrollTop = 0;
+    else if (follow) feed.scrollTop = feed.scrollHeight;
+    renderedRun = run.id;
+    renderedCount = run.messages.length;
   }
-  if (follow) feed.scrollTop = feed.scrollHeight;
   get<HTMLButtonElement>("stop").hidden = run.status !== "running";
   get<HTMLButtonElement>("send").disabled = busy || run.status !== "running";
   get<HTMLTextAreaElement>("guidance").disabled = run.status !== "running";
@@ -154,14 +212,14 @@ app.addEventListener("hostcontextchanged", theme);
 get("refresh").onclick = () =>
   void action(async () => {
     update(await tool("review_room_state"));
+    await loadDiscussion();
   });
 get("add").onclick = () => {
-  if (get("reviewers").children.length < 4)
-    reviewerRow(get("reviewers").children.length + 1);
+  if (get("reviewers").children.length < 4) reviewerRow(nextReviewer++);
 };
 get<HTMLSelectElement>("history").onchange = (event) => {
   selected = (event.target as HTMLSelectElement).value || undefined;
-  render();
+  void action(loadDiscussion);
 };
 get("new").onclick = () => {
   selected = undefined;
@@ -187,6 +245,7 @@ get<HTMLFormElement>("setup").onsubmit = (event) => {
     );
     state.runs.unshift(run);
     selected = run.id;
+    selectedRun = run;
   });
 };
 get("stop").onclick = () =>
@@ -196,6 +255,7 @@ get("stop").onclick = () =>
         await tool("stop_checkpoint_review", { id: selected }),
       );
       state.runs = state.runs.map((r) => (r.id === run.id ? run : r));
+      await loadDiscussion();
     }
   });
 get<HTMLFormElement>("composer").onsubmit = (event) => {
@@ -209,6 +269,7 @@ get<HTMLFormElement>("composer").onsubmit = (event) => {
       }),
     );
     state.runs = state.runs.map((r) => (r.id === run.id ? run : r));
+    await loadDiscussion();
     get<HTMLTextAreaElement>("guidance").value = "";
   });
 };
@@ -258,10 +319,22 @@ try {
   )
     await app.requestDisplayMode({ mode: "fullscreen" });
   setInterval(() => {
-    if (document.hidden || busy) return;
-    void action(async () => {
-      update(await tool("review_room_state"));
-    });
+    if (document.hidden || busy || polling) return;
+    polling = true;
+    void tool("review_room_state")
+      .then(async (data) => {
+        if (!busy) {
+          update(data);
+          await loadDiscussion();
+          render();
+        }
+      })
+      .catch((error) =>
+        message(error instanceof Error ? error.message : String(error)),
+      )
+      .finally(() => {
+        polling = false;
+      });
   }, 2500);
 } catch (error) {
   message(

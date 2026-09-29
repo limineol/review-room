@@ -98,6 +98,7 @@ test("independent first round, shared later round, and frozen diff", async () =>
   expect(prompts[2]).toContain("Finding from B");
   expect(prompts.every((p) => !p.includes("MUTATED AFTER CAPTURE"))).toBe(true);
   expect(done.messages.filter((m) => m.round > 0)).toHaveLength(4);
+  expect(store.list()[0]?.messages).toEqual([]);
   store.close();
 });
 test("cancellation aborts the active reviewer and prevents subsequent turns", async () => {
@@ -132,5 +133,20 @@ test("reviewer errors become a visible failed run", async () => {
   const done = await finished(store, started.id);
   expect(done.status).toBe("failed");
   expect(done.messages.at(-1)?.text).toContain("Model access denied");
+  store.close();
+});
+
+test("expired heartbeat interrupts a run even when its owner PID still exists", async () => {
+  const { Database } = await import("bun:sqlite");
+  const { path } = await repository();
+  const dbPath = join(path, "state.sqlite");
+  const store = new Store(dbPath);
+  const id = store.create(config(path), "test");
+  const db = new Database(dbPath);
+  db.query("UPDATE leases SET heartbeat=0 WHERE run=?").run(id);
+  db.close();
+  expect(store.get(id).status).toBe("interrupted");
+  store.status(id, "completed");
+  expect(store.get(id).status).toBe("interrupted");
   store.close();
 });

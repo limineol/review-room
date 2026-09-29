@@ -15,23 +15,23 @@ The panel uses the host's theme and typography tokens. Review history is shared 
 ## Supported scope
 
 - Detects Codex, Claude Code, OpenCode, Gemini CLI, Cursor Agent, Factory Droid, Devin, Grok Build, Antigravity, ForgeCode, Hermes, Pi, Oh My Pi, and Slate on PATH and common local binary directories.
-- Executes Codex and Claude Code. Other discovered harnesses are labeled discovery-only.
+- Executes Codex and Claude Code. Other matching executable names are labeled unverified candidates; a name match may be an unrelated program.
 - Codex suggestions come from its local model cache. Claude suggestions are CLI aliases. These are not a claim of account access; custom model IDs are accepted and errors are visible.
 - Captures tracked changes against the selected commit plus untracked regular text files. `HEAD` reviews uncommitted work; choose another base to include commits. Git ignored files are excluded.
 - The review is limited to a frozen diff, at most 300 KB. It rejects unsupported untracked files rather than silently omitting them. Reviewers cannot inspect surrounding files or execute tests. Binary tracked changes appear only as Git's binary-change notice.
-- Two to four reviewers, one to three rounds, three-minute limit per reviewer turn. Responses appear when a turn completes. User messages reach later turns, not a turn already in progress.
+- Two to four reviewers, one to three rounds, three-minute limit and 24,000-character output limit per reviewer turn. Responses appear when a turn completes. User messages reach later turns, not a turn already in progress.
 - Codex uses a read-only sandbox with shell tools, plugins and user configuration disabled. Claude uses safe mode, no tools, strict MCP configuration and noninteractive denied permissions. Each invocation uses a temporary empty working directory and stdin for the prompt.
-- Runs require the MCP process to stay alive. Graceful shutdown marks them interrupted; stale dead process records are detected when read. There is no automatic retry or model fallback.
+- Runs require the MCP process to stay alive. Graceful shutdown marks them interrupted; dead processes and expired 30-second heartbeat leases are detected when read. There is no automatic retry or model fallback.
 
 ## Development
 
-Requires Bun 1.3.14 or later and the selected signed-in CLIs. Dependencies are pinned exactly.
+This first release targets macOS and Linux. Requires Bun 1.3.14 or later and the selected signed-in CLIs. Dependencies are pinned exactly.
 
 ```sh
 bun install --frozen-lockfile
 bun run check
-bun test
 bun run build
+bun test
 ```
 
 The built `dist/server.js` and `dist/panel.html` are self-contained except for the Bun runtime and local CLIs. `mcp.json` is the portable manifest; `.codex-plugin/plugin.json` and `.mcp.json` provide Codex compatibility. No edits to global agent instructions are needed.

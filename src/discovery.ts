@@ -69,7 +69,8 @@ export async function discover(): Promise<z.infer<typeof harnessSchema>[]> {
       if (!path) return undefined;
       return {
         id,
-        name,
+        name:
+          id === "codex" || id === "claude" ? name : `${id} (possible ${name})`,
         path,
         runnable: id === "codex" || id === "claude",
         models:

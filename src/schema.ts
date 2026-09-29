@@ -66,6 +66,13 @@ export const harnessSchema = z.object({
   modelSource: z.string(),
 });
 export const stateSchema = z.object({
+  machine: z
+    .object({
+      platform: z.string(),
+      architecture: z.string(),
+      release: z.string(),
+    })
+    .optional(),
   harnesses: z.array(harnessSchema),
   runs: z.array(runSchema),
 });

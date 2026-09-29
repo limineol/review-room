@@ -11,11 +11,14 @@
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "1.31.0",
     "@openai/mcp-extensions": "0.1.0",
+    "dompurify": "3.4.16",
+    "marked": "18.0.14",
     "zod": "4.6.5"
   },
   "scripts": {
     "build": "bun build.ts",
     "check": "tsc --noEmit",
     "test": "bun test"
-  }
+  },
+  "version": "0.1.2"
 }

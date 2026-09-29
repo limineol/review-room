@@ -1,9 +1,11 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "review-room",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Discover local coding harnesses and discuss checkpoint reviews with selected models.",
-  "author": { "name": "Dani" },
+  "author": {
+    "name": "Dani"
+  },
   "extensions": {
     "com.openai": {
       "interface": {

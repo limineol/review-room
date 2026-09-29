@@ -15,6 +15,9 @@ export class Store {
     this.db.exec(
       "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, config TEXT NOT NULL, status TEXT NOT NULL, fingerprint TEXT NOT NULL, created TEXT NOT NULL, owner INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, run TEXT NOT NULL, speaker TEXT NOT NULL, round INTEGER NOT NULL, text TEXT NOT NULL, time TEXT NOT NULL);",
     );
+    this.db.exec(
+      "CREATE TABLE IF NOT EXISTS leases (run TEXT PRIMARY KEY, heartbeat INTEGER NOT NULL)",
+    );
   }
   create(config: Start, fingerprint: string) {
     const id = crypto.randomUUID();
@@ -28,7 +31,15 @@ export class Store {
         new Date().toISOString(),
         process.pid,
       );
+    this.touch(id);
     return id;
+  }
+  touch(id: string) {
+    this.db
+      .query(
+        "INSERT INTO leases VALUES (?, ?) ON CONFLICT(run) DO UPDATE SET heartbeat=excluded.heartbeat",
+      )
+      .run(id, Date.now());
   }
   message(id: string, speaker: string, round: number, text: string) {
     this.db
@@ -42,7 +53,7 @@ export class Store {
       .query("UPDATE runs SET status=? WHERE id=? AND status=?")
       .run(status, id, "running");
   }
-  get(id: string): Run {
+  get(id: string, includeMessages = true): Run {
     const row = this.db
       .query<
         {
@@ -58,21 +69,39 @@ export class Store {
       .get(id);
     if (!row) throw new Error("Review not found.");
     if (row.status === "running") {
-      try {
-        process.kill(row.owner, 0);
-      } catch {
+      const lease = this.db
+        .query<
+          { heartbeat: number },
+          [string]
+        >("SELECT heartbeat FROM leases WHERE run=?")
+        .get(id);
+      if (lease && Date.now() - lease.heartbeat > 30_000) {
         this.status(id, "interrupted");
         row.status = "interrupted";
+      }
+      try {
+        process.kill(row.owner, 0);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ESRCH"
+        ) {
+          this.status(id, "interrupted");
+          row.status = "interrupted";
+        }
       }
     }
     return runSchema.parse({
       ...row,
       config: JSON.parse(row.config),
-      messages: this.db
-        .query(
-          "SELECT id,speaker,round,text,time FROM messages WHERE run=? ORDER BY id",
-        )
-        .all(id),
+      messages: includeMessages
+        ? this.db
+            .query(
+              "SELECT id,speaker,round,text,time FROM messages WHERE run=? ORDER BY id",
+            )
+            .all(id)
+        : [],
     });
   }
   list() {
@@ -81,7 +110,7 @@ export class Store {
         "SELECT id FROM runs ORDER BY created DESC LIMIT 30",
       )
       .all()
-      .map((row) => this.get(row.id));
+      .map((row) => this.get(row.id, false));
   }
   close() {
     this.db.close();

@@ -9,13 +9,24 @@ const limit = 300_000;
 export async function checkpoint(repo: string, base: string) {
   if (!isAbsolute(repo)) throw new Error("Choose an absolute repository path.");
   const root = await realpath(repo);
-  const git = async (...args: string[]) =>
-    (
-      await exec("git", ["-C", root, ...args], {
-        maxBuffer: limit * 2,
-        timeout: 15_000,
-      })
-    ).stdout;
+  const git = async (...args: string[]) => {
+    try {
+      return (
+        await exec("git", ["-C", root, ...args], {
+          maxBuffer: limit * 2,
+          timeout: 15_000,
+        })
+      ).stdout;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"
+      )
+        throw new Error("Checkpoint exceeds 300 KB. Choose a smaller change.");
+      throw error;
+    }
+  };
   const top = (await git("rev-parse", "--show-toplevel")).trim();
   if ((await realpath(top)) !== root)
     throw new Error("Choose the repository root.");

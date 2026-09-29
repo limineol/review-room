@@ -4,7 +4,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { stateSchema } from "../src/schema";
+import { stateSchema, runSchema } from "../src/schema";
+import { Store } from "../src/store";
 
 test("built MCP server exposes both entrypoints, serves its bundled panel, and discovers harnesses", async () => {
   const dir = await mkdtemp(join(tmpdir(), "review-room-mcp-"));
@@ -33,6 +34,44 @@ test("built MCP server exposes both entrypoints, serves its bundled panel, and d
       arguments: {},
     });
     expect(stateSchema.parse(opened.structuredContent).runs).toEqual([]);
+    const store = new Store(join(dir, "state.sqlite"));
+    const id = store.create(
+      {
+        repo: dir,
+        base: "HEAD",
+        checkpoint: "pagination",
+        task: "test",
+        rounds: 2,
+        reviewers: [
+          { name: "A", harness: "codex", model: "test" },
+          { name: "B", harness: "claude", model: "test" },
+        ],
+      },
+      "fingerprint",
+    );
+    for (let i = 0; i < 5; i++) store.message(id, "A", 1, `Message ${i}`);
+    store.status(id, "completed");
+    store.close();
+    const state = await client.callTool({
+      name: "review_room_state",
+      arguments: {},
+    });
+    expect(
+      stateSchema.parse(state.structuredContent).runs[0]?.messages,
+    ).toEqual([]);
+    const page = await client.callTool({
+      name: "get_checkpoint_review",
+      arguments: { id },
+    });
+    const messages = runSchema.parse(page.structuredContent).messages;
+    expect(messages).toHaveLength(3);
+    const next = await client.callTool({
+      name: "get_checkpoint_review",
+      arguments: { id, after: messages.at(-1)!.id },
+    });
+    expect(
+      runSchema.parse(next.structuredContent).messages.map((m) => m.text),
+    ).toEqual(["Message 3", "Message 4"]);
     const resource = await client.readResource({
       uri: "ui://review-room/panel",
     });
@@ -42,6 +81,19 @@ test("built MCP server exposes both entrypoints, serves its bundled panel, and d
         ? resource.contents[0].text
         : "",
     ).toContain("Start checkpoint review");
+    const html =
+      resource.contents[0] && "text" in resource.contents[0]
+        ? resource.contents[0].text
+        : "";
+    const script = html.match(
+      /<script type="module">([\s\S]*?)<\/script>/,
+    )?.[1];
+    expect(script).toBeDefined();
+    expect(() =>
+      new Bun.Transpiler({ loader: "js", target: "browser" }).transformSync(
+        script!,
+      ),
+    ).not.toThrow();
   } finally {
     await client.close();
     await rm(dir, { recursive: true, force: true });
