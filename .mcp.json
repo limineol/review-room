@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "review-room": {
+      "command": "bun",
+      "args": ["${PLUGIN_ROOT}/dist/server.js"],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "review-room",
+  "version": "0.1.0",
+  "description": "Discover local coding harnesses and discuss checkpoint reviews with selected models.",
+  "author": { "name": "Dani" },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Review Room",
+        "shortDescription": "Reviews in conversation",
+        "longDescription": "Choose local CLI harnesses and models, review a frozen checkpoint, and follow a discussion between reviewers beside your Codex chat.",
+        "developerName": "Dani",
+        "category": "Developer Tools",
+        "capabilities": ["Interactive", "Read", "Write"],
+        "logo": "./assets/icon.svg",
+        "composerIcon": "./assets/icon.svg",
+        "defaultPrompt": "Open Review Room, discover my local harnesses, and help me choose models for an adversarial review."
+      }
+    }
+  }
+}
