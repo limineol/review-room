@@ -7,15 +7,17 @@ import {
 import { OpenAIExtensions } from "@openai/mcp-extensions/app";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { stateSchema, runSchema, type Run } from "./schema";
-const app = new App({ name: "Review Room", version: "0.2.0" });
+import { stateSchema, runSchema, type Run, type RunSummary } from "./schema";
+const app = new App({ name: "Review Room", version: "0.2.1" });
 const extensions = new OpenAIExtensions(app);
 const get = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
-let runs: Run[] = [],
+let runs: RunSummary[] = [],
   selected: string | undefined,
   current: Run | undefined,
   busy = false,
+  polling = false,
+  revision = 0,
   renderedId: string | undefined,
   count = 0,
   historyKey = "";
@@ -35,6 +37,8 @@ function error(value: unknown) {
     value instanceof Error ? value.message : String(value);
 }
 function render() {
+  get<HTMLButtonElement>("request").disabled = busy;
+  get<HTMLButtonElement>("stop").disabled = busy;
   const key = runs.map((r) => r.id + ":" + r.status).join("|");
   const history = get<HTMLSelectElement>("history");
   if (key !== historyKey) {
@@ -122,14 +126,17 @@ async function load() {
     return;
   }
   const id = selected;
+  const requestRevision = revision;
   const run = runSchema.parse(
     await tool("review_room_discussion", { runId: id }),
   );
-  if (selected === id) current = run;
+  if (selected === id && revision === requestRevision) current = run;
 }
 async function action(fn: () => Promise<void>) {
   if (busy) return;
   busy = true;
+  revision++;
+  render();
   get("error").textContent = "";
   try {
     await fn();
@@ -144,12 +151,15 @@ function receive(data: unknown) {
   const parsed = stateSchema.safeParse(data);
   if (!parsed.success) return;
   runs = parsed.data.runs;
-  if (parsed.data.selectedRunId) selected = parsed.data.selectedRunId;
+  if (parsed.data.selectedRunId) {
+    selected = parsed.data.selectedRunId;
+    revision++;
+  }
   render();
 }
 app.ontoolresult = (r) => {
   receive(r.structuredContent);
-  void action(load);
+  void load().then(render).catch(error);
 };
 function theme() {
   const c = app.getHostContext();
@@ -194,17 +204,19 @@ try {
   )
     await app.requestDisplayMode({ mode: "fullscreen" });
   setInterval(() => {
-    if (busy || document.hidden) return;
-    busy = true;
+    if (busy || polling || document.hidden) return;
+    polling = true;
+    const requestRevision = revision;
     void tool("review_room_state")
       .then(async (data) => {
+        if (busy || revision !== requestRevision) return;
         receive(data);
         await load();
         render();
       })
       .catch(error)
       .finally(() => {
-        busy = false;
+        polling = false;
       });
   }, 1500);
 } catch (e) {

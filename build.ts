@@ -16,23 +16,25 @@ const probe = await Bun.build({
 });
 if (!probe.success)
   throw new AggregateError(probe.logs, "Event probe build failed");
-const panel = await Bun.build({
-  entrypoints: ["src/panel.ts"],
-  target: "browser",
-  minify: true,
-});
-if (!panel.success || !panel.outputs[0])
-  throw new AggregateError(panel.logs, "Panel build failed");
 const css = await readFile(
   "node_modules/@openai/mcp-extensions/styles.css",
   "utf8",
 );
-const script = (await panel.outputs[0].text()).replaceAll(
-  "</script",
-  "<\\/script",
-);
-const styles = css + (await readFile("src/panel.css", "utf8"));
-const html = (await readFile("src/panel.html", "utf8"))
-  .replace("/*SCRIPT*/", () => script)
-  .replace("/*STYLES*/", () => styles);
-await writeFile("dist/panel.html", html);
+for (const view of ["panel", "model-picker"]) {
+  const bundle = await Bun.build({
+    entrypoints: [`src/${view}.ts`],
+    target: "browser",
+    minify: true,
+  });
+  if (!bundle.success || !bundle.outputs[0])
+    throw new AggregateError(bundle.logs, `${view} build failed`);
+  const script = (await bundle.outputs[0].text()).replaceAll(
+    "</script",
+    "<\\/script",
+  );
+  const styles = css + (await readFile(`src/${view}.css`, "utf8"));
+  const html = (await readFile(`src/${view}.html`, "utf8"))
+    .replace("/*SCRIPT*/", () => script)
+    .replace("/*STYLES*/", () => styles);
+  await writeFile(`dist/${view}.html`, html);
+}

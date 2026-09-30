@@ -4,7 +4,7 @@ export const modelSchema = z
   .trim()
   .min(1)
   .max(160)
-  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/);
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/\[\]-]*$/);
 export const reviewerSchema = z.object({
   name: z
     .string()
@@ -67,7 +67,7 @@ export const replySchema = z.object({
 export type Reply = z.infer<typeof replySchema>;
 export const participantSchema = reviewerSchema.extend({
   sessionId: z.string().nullable(),
-  state: z.enum(["idle", "running", "failed"]),
+  state: z.enum(["idle", "running", "failed", "stopped"]),
 });
 export type Participant = z.infer<typeof participantSchema>;
 export const messageSchema = z.object({
@@ -90,6 +90,7 @@ export const runSchema = z.object({
     "ready",
     "collecting",
     "completed",
+    "partial",
     "failed",
     "cancelled",
     "interrupted",
@@ -102,8 +103,17 @@ export const runSchema = z.object({
   messages: z.array(messageSchema),
 });
 export type Run = z.infer<typeof runSchema>;
+export const runSummarySchema = runSchema.omit({
+  prompt: true,
+  messages: true,
+});
+export type RunSummary = z.infer<typeof runSummarySchema>;
+export function summarize(run: Run): RunSummary {
+  const { prompt: _prompt, messages: _messages, ...summary } = run;
+  return summary;
+}
 export const stateSchema = z.object({
-  runs: z.array(runSchema),
+  runs: z.array(runSummarySchema),
   selectedRunId: z.string().optional(),
 });
 export const harnessSchema = z.object({

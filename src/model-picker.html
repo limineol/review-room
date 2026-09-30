@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      /*STYLES*/
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="title">Allowed reviewer models</h1>
+      <button id="refresh" disabled>Refresh</button>
+    </header>
+    <p>Choose the models the agent may use for reviews.</p>
+    <label class="search"
+      >Search models<input
+        id="search"
+        type="search"
+        placeholder="Search by name or description"
+        autocomplete="off"
+    /></label>
+    <p id="status" role="status">Loading model catalog…</p>
+    <p id="error" role="alert"></p>
+    <div id="choices"></div>
+    <footer>
+      <span id="count">0 selected</span
+      ><button id="save" disabled>Save selection</button>
+    </footer>
+    <script type="module">
+      /*SCRIPT*/
+    </script>
+  </body>
+</html>

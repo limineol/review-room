@@ -1,6 +1,6 @@
 {
   "name": "review-room",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Agent-controlled adversarial reviews with local harnesses and a native discussion panel.",
   "author": {
     "name": "Dani"

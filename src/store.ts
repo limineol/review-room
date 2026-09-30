@@ -29,6 +29,21 @@ type CycleRow = {
   heartbeat: number;
   owner: string;
 };
+// Wall-clock leases can expire during sleep while the worker is still alive.
+function ownerAlive(owner: string) {
+  const pid = owner.match(/^(\d+):/)?.[1];
+  if (!pid) return false;
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch (error) {
+    return !(
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ESRCH"
+    );
+  }
+}
 export class Store {
   private db: Database;
   constructor(path = join(dataDirectory, "agent-reviews.sqlite")) {
@@ -41,6 +56,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS participants (run TEXT NOT NULL,name TEXT NOT NULL,harness TEXT NOT NULL,model TEXT NOT NULL,sessionId TEXT,state TEXT NOT NULL,PRIMARY KEY(run,name));
       CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT,run TEXT NOT NULL,sender TEXT NOT NULL,recipient TEXT NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL,time TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS queue (id INTEGER PRIMARY KEY AUTOINCREMENT,run TEXT NOT NULL,reviewer TEXT NOT NULL,text TEXT NOT NULL,replyTo TEXT);
+      CREATE TABLE IF NOT EXISTS invalid_sessions (id TEXT PRIMARY KEY);
       CREATE INDEX IF NOT EXISTS message_run ON messages(run,id);`);
   }
   settings(): Settings {
@@ -109,7 +125,7 @@ export class Store {
               .query<
                 { sessionId: string | null },
                 [string, string, string, string]
-              >("SELECT p.sessionId FROM participants p JOIN cycles c ON c.id=p.run WHERE c.roomId=? AND c.status='completed' AND p.name=? AND p.harness=? AND p.model=? ORDER BY c.created DESC LIMIT 1")
+              >("SELECT CASE WHEN p.sessionId IN (SELECT id FROM invalid_sessions) THEN NULL ELSE p.sessionId END AS sessionId FROM participants p JOIN cycles c ON c.id=p.run WHERE c.roomId=? AND c.status IN ('completed','partial') AND p.state='idle' AND p.name=? AND p.harness=? AND p.model=? ORDER BY c.created DESC LIMIT 1")
               .get(roomId, reviewer.name, reviewer.harness, reviewer.model)
           : null;
         this.db
@@ -157,6 +173,22 @@ export class Store {
     text: string,
     replyTo: string | null = null,
   ) {
+    const participant = this.db
+      .query<
+        { state: string },
+        [string, string]
+      >("SELECT state FROM participants WHERE run=? AND name=?")
+      .get(run, reviewer);
+    if (participant?.state === "failed") {
+      this.message(
+        run,
+        "Review Room",
+        "agent",
+        "status",
+        `${reviewer} is unavailable; the peer message was not queued.`,
+      );
+      return;
+    }
     if (this.remaining(run) <= 0) {
       this.message(
         run,
@@ -208,14 +240,27 @@ export class Store {
       )
       .run(sessionId, run, name);
   }
+  invalidateSession(id: string) {
+    this.db.query("INSERT OR IGNORE INTO invalid_sessions VALUES (?)").run(id);
+  }
+  failTurn(run: string, name: string) {
+    this.db.transaction(() => {
+      this.db
+        .query("UPDATE participants SET state='failed' WHERE run=? AND name=?")
+        .run(run, name);
+      this.db
+        .query("DELETE FROM queue WHERE run=? AND reviewer=?")
+        .run(run, name);
+    })();
+  }
   settle(run: string) {
     this.db
       .query(
-        `UPDATE cycles SET status='ready' WHERE id=? AND status='running' AND NOT EXISTS(SELECT 1 FROM queue WHERE run=?) AND NOT EXISTS(SELECT 1 FROM participants WHERE run=? AND state='running')`,
+        `UPDATE cycles SET status=CASE WHEN EXISTS(SELECT 1 FROM participants WHERE run=cycles.id AND state='idle') THEN 'ready' ELSE 'failed' END WHERE id=? AND status='running' AND NOT EXISTS(SELECT 1 FROM queue WHERE run=?) AND NOT EXISTS(SELECT 1 FROM participants WHERE run=? AND state='running')`,
       )
       .run(run, run, run);
   }
-  send(run: string, to: string, text: string) {
+  send(run: string, to: string, text: string, owner: string) {
     return this.db.transaction(() => {
       const cycle = this.get(run, false);
       if (!["running", "ready"].includes(cycle.status))
@@ -224,14 +269,29 @@ export class Store {
         throw new Error("Turn limit reached. Collect and start another cycle.");
       const recipients =
         to === "all"
-          ? cycle.reviewers
+          ? cycle.reviewers.filter(
+              (r) => r.state === "idle" || r.state === "running",
+            )
           : cycle.reviewers.filter((r) => r.name === to);
-      if (!recipients.length) throw new Error("Unknown reviewer.");
+      if (!recipients.length)
+        throw new Error(
+          to === "all"
+            ? "No reviewers are available. Start another cycle."
+            : "Unknown reviewer.",
+        );
+      if (recipients.some((r) => r.state === "failed" || r.state === "stopped"))
+        throw new Error(
+          "A selected reviewer failed. Target an available reviewer or start another cycle.",
+        );
       if (this.remaining(run) < recipients.length)
         throw new Error(
           "Not enough turns remain. Collect and start another cycle.",
         );
-      this.db.query("UPDATE cycles SET status='running' WHERE id=?").run(run);
+      this.db
+        .query(
+          "UPDATE cycles SET owner=CASE WHEN status='ready' THEN ? ELSE owner END, heartbeat=CASE WHEN status='ready' THEN ? ELSE heartbeat END, status='running' WHERE id=?",
+        )
+        .run(owner, Date.now(), run);
       this.message(run, "agent", to, "message", text);
       for (const r of recipients) this.enqueue(run, r.name, text);
     })();
@@ -248,7 +308,7 @@ export class Store {
         .query(
           "UPDATE participants SET state=? WHERE run=? AND state='running'",
         )
-        .run(status === "failed" ? "failed" : "idle", run);
+        .run(status === "failed" ? "failed" : "stopped", run);
     }
   }
   touch(owner: string) {
@@ -272,8 +332,9 @@ export class Store {
       .get(id);
     if (!row) throw new Error("Review not found.");
     if (
-      ["running", "ready", "collecting"].includes(row.status) &&
-      Date.now() - row.heartbeat > 30000
+      ["running", "collecting"].includes(row.status) &&
+      Date.now() - row.heartbeat > 30000 &&
+      !ownerAlive(row.owner)
     ) {
       this.status(id, "interrupted");
       row.status = "interrupted";
@@ -290,12 +351,30 @@ export class Store {
     });
   }
   messages(run: string, after: number, limit = 6, includeActivity = true) {
-    return this.db
+    const rows = this.db
       .query(
-        "SELECT id,sender,recipient,kind,text,time FROM messages WHERE run=? AND id>? AND (? OR kind<>'activity') ORDER BY id LIMIT ?",
+        "SELECT id,sender,recipient,kind,text,time FROM messages WHERE run=? AND id>? AND (? OR (kind<>'activity' AND sender<>'agent')) ORDER BY id LIMIT ?",
       )
       .all(run, after, includeActivity ? 1 : 0, limit)
       .map((r) => messageSchema.parse(r));
+    if (includeActivity) return rows;
+    const page: Message[] = [];
+    let size = 0;
+    for (const row of rows) {
+      if (page.length && size + row.text.length > 24000) break;
+      page.push(row);
+      size += row.text.length;
+    }
+    return page;
+  }
+  page(run: string, after: number) {
+    const messages = this.messages(run, after, 6, false);
+    const cursor = messages.at(-1)?.id ?? after;
+    return {
+      messages,
+      cursor,
+      hasMore: this.messages(run, cursor, 1, false).length > 0,
+    };
   }
   list() {
     return this.db
@@ -305,21 +384,21 @@ export class Store {
       .all()
       .map((r) => this.get(r.id, false));
   }
-  beginCollect(run: string) {
+  beginCollect(run: string, owner: string) {
     const result = this.db
       .query(
-        "UPDATE cycles SET status='collecting' WHERE id=? AND status='ready'",
+        "UPDATE cycles SET status='collecting',owner=?,heartbeat=? WHERE id=? AND status IN ('ready','failed','cancelled','interrupted')",
       )
-      .run(run);
+      .run(owner, Date.now(), run);
     if (!result.changes)
       throw new Error("Wait until all reviewers are idle before collecting.");
   }
-  collected(run: string, path: string) {
+  collected(run: string, path: string, status: Run["status"]) {
     this.db
       .query(
-        "UPDATE cycles SET status='completed',artifact=? WHERE id=? AND status='collecting'",
+        "UPDATE cycles SET status=?,artifact=? WHERE id=? AND status='collecting'",
       )
-      .run(path, run);
+      .run(status, path, run);
   }
   close() {
     this.db.close();

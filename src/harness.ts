@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, rename } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { z } from "zod";
 import { executable } from "./discovery";
@@ -15,13 +16,20 @@ export type Invocation = {
 };
 export type InvocationResult = { reply: Reply; sessionId: string | null };
 export type Invoke = (input: Invocation) => Promise<InvocationResult>;
+export class MissingSessionError extends Error {}
 const jsonSchema = JSON.stringify(
   z.toJSONSchema(replySchema, { target: "draft-7" }),
 );
 export async function writeReplySchema(directory: string) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  const path = join(directory, "reply-schema.json");
-  await writeFile(path, jsonSchema, { mode: 0o600 });
+  const hash = createHash("sha256")
+    .update(jsonSchema)
+    .digest("hex")
+    .slice(0, 16);
+  const path = join(directory, `reply-schema-${hash}.json`);
+  const temporary = join(directory, `.reply-schema-${crypto.randomUUID()}.tmp`);
+  await writeFile(temporary, jsonSchema, { mode: 0o600 });
+  await rename(temporary, path);
   return path;
 }
 export function argumentsFor(input: Invocation): string[] {
@@ -191,17 +199,24 @@ export const invoke: Invoke = async (input) => {
       clearTimeout(timeout);
       input.signal.removeEventListener("abort", abort);
       consume(buffer);
-      if (failure) reject(failure);
-      else if (code !== 0)
-        reject(
-          new Error(
-            errors
-              .split("\n")
-              .filter((l) => /^ERROR:|^Error:/.test(l))
-              .at(-1) ?? `Reviewer exited ${code}: ${errors.slice(-500)}`,
-          ),
+      if (!failure && code !== 0)
+        failure = new Error(
+          errors
+            .split("\n")
+            .filter((l) => /^ERROR:|^Error:/.test(l))
+            .at(-1) ?? `Reviewer exited ${code}: ${errors.slice(-500)}`,
         );
-      else if (!reply)
+      if (failure) {
+        const missing =
+          /no (?:conversation|session|saved rollout) (?:was )?found|(?:session|conversation).{0,80}(?:not found|does not exist)/i.test(
+            failure.message,
+          );
+        reject(
+          input.reviewer.sessionId && missing
+            ? new MissingSessionError(failure.message)
+            : failure,
+        );
+      } else if (!reply)
         reject(new Error("Reviewer did not return a review response."));
       else resolve({ reply, sessionId });
     });

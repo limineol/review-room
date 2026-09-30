@@ -56,3 +56,11 @@ test.skipIf(process.platform === "win32")(
   },
   10000,
 );
+
+test("missing CLI history is distinguished from other provider errors", async () => {
+  const result = await fixture(
+    `console.error('Error: No conversation found with session ID'); process.exit(1);`,
+    `try { await invoke({...input,reviewer:{...reviewer,sessionId:'00000000-0000-0000-0000-000000000000'},signal:new AbortController().signal}); } catch(error) { console.log(error.constructor.name); }`,
+  );
+  expect(result.output).toContain("MissingSessionError");
+});

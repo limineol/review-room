@@ -15,10 +15,20 @@ import { readFile } from "node:fs/promises";
 import { discover } from "./discovery";
 import { Store } from "./store";
 import { Reviews, promptGuide } from "./runner";
-import { startSchema, settingsSchema, models } from "./schema";
-const server = new McpServer({ name: "review-room", version: "0.2.0" });
+import {
+  startSchema,
+  settingsSchema,
+  modelSchema,
+  models,
+  summarize,
+} from "./schema";
+import { ModelSettings, nativeSettingsSchema } from "./model-settings";
+import { harnessId } from "./model-picker-schema";
+const version = "0.2.1";
+const server = new McpServer({ name: "review-room", version });
 const extensions = new OpenAIExtensions(server);
 const store = new Store(process.env.REVIEW_ROOM_DB);
+const modelSettings = new ModelSettings(store);
 const reviews = new Reviews(store, undefined, process.env.REVIEW_ROOM_DATA);
 const html = await readFile(new URL("./panel.html", import.meta.url), "utf8");
 const uri = "ui://review-room/panel-v2";
@@ -37,21 +47,9 @@ extensions.settings?.register({
       schema: settingsSchema.shape.codexEnabled,
       title: "Enable Codex",
     },
-    codexModels: {
-      schema: settingsSchema.shape.codexModels,
-      title: "Allowed Codex models",
-      description:
-        "Exact model IDs, separated by commas or spaces. The agent chooses among these.",
-    },
     claudeEnabled: {
       schema: settingsSchema.shape.claudeEnabled,
       title: "Enable Claude Code",
-    },
-    claudeModels: {
-      schema: settingsSchema.shape.claudeModels,
-      title: "Allowed Claude models",
-      description:
-        "Exact model IDs or CLI aliases, separated by commas or spaces.",
     },
     reuseSessions: {
       schema: settingsSchema.shape.reuseSessions,
@@ -77,18 +75,19 @@ extensions.settings?.register({
       kind: "group",
       title: "Harnesses and models",
       items: [
-        "codexEnabled",
-        "codexModels",
-        "claudeEnabled",
-        "claudeModels",
-      ].map((property) => ({
-        kind: "property" as const,
-        property: property as
-          | "codexEnabled"
-          | "codexModels"
-          | "claudeEnabled"
-          | "claudeModels",
-      })),
+        { kind: "property", property: "codexEnabled" },
+        {
+          kind: "tool",
+          tool: "choose_codex_models",
+          title: "Choose Codex models…",
+        },
+        { kind: "property", property: "claudeEnabled" },
+        {
+          kind: "tool",
+          tool: "choose_claude_models",
+          title: "Choose Claude models…",
+        },
+      ],
     },
     {
       kind: "group",
@@ -101,9 +100,56 @@ extensions.settings?.register({
       ],
     },
   ],
-  read: () => store.settings(),
-  update: (set) => store.updateSettings(set),
+  read: () => nativeSettingsSchema.parse(store.settings()),
+  update: (set) => nativeSettingsSchema.parse(store.updateSettings(set)),
 });
+const pickerUri = "ui://review-room/model-picker";
+const pickerHtml = await readFile(
+  new URL("./model-picker.html", import.meta.url),
+  "utf8",
+);
+registerAppResource(server, "model-picker", pickerUri, {}, async () => ({
+  contents: [
+    { uri: pickerUri, mimeType: RESOURCE_MIME_TYPE, text: pickerHtml },
+  ],
+}));
+for (const harness of ["codex", "claude"] as const) {
+  registerAppTool(
+    server,
+    `choose_${harness}_models`,
+    {
+      title: `Choose ${harness === "codex" ? "Codex" : "Claude"} models`,
+      description: "Choose allowed reviewer models in plugin Settings.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+      _meta: { ui: { resourceUri: pickerUri, visibility: ["app"] } },
+    },
+    async () => result(await modelSettings.read(harness)),
+  );
+}
+server.registerTool(
+  "review_models_read",
+  {
+    inputSchema: { harness: harnessId, refresh: z.boolean().default(false) },
+    annotations: { readOnlyHint: true },
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  async ({ harness, refresh }) =>
+    result(await modelSettings.read(harness, refresh)),
+);
+server.registerTool(
+  "review_models_save",
+  {
+    inputSchema: {
+      harness: harnessId,
+      selected: z.array(modelSchema).max(100),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  async ({ harness, selected }) =>
+    result(await modelSettings.save(harness, selected)),
+);
 registerAppResource(server, "review-room-panel", uri, {}, async () => ({
   contents: [
     {
@@ -136,7 +182,10 @@ registerAppTool(
     },
   },
   async ({ runId }) =>
-    result({ runs: store.list(), ...(runId ? { selectedRunId: runId } : {}) }),
+    result({
+      runs: store.list().map(summarize),
+      ...(runId ? { selectedRunId: runId } : {}),
+    }),
 );
 server.registerTool(
   "review_discover",
@@ -148,8 +197,24 @@ server.registerTool(
   },
   async () => {
     const settings = store.settings();
-    const harnesses = await discover();
+    const harnesses = await Promise.all(
+      (await discover()).map(async (h) => {
+        if (h.id !== "codex" && h.id !== "claude") return h;
+        if (!settings[`${h.id}Enabled`]) return h;
+        const catalog = await modelSettings.read(h.id);
+        return {
+          ...h,
+          models: catalog.choices.map((m) => m.id),
+          modelChoices: catalog.choices,
+          modelSource:
+            "Harness model catalog; account access is checked when run",
+          catalogError: catalog.error,
+          catalogStale: catalog.stale,
+        };
+      }),
+    );
     return result({
+      version,
       settings,
       harnesses,
       enabled: harnesses
@@ -192,7 +257,7 @@ server.registerTool(
       openWorldHint: true,
     },
   },
-  async (config) => result(await reviews.start(config)),
+  async (config) => result(summarize(await reviews.start(config))),
 );
 server.registerTool(
   "review_send",
@@ -206,7 +271,8 @@ server.registerTool(
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
-  async ({ runId, to, text }) => result(reviews.send(runId, to, text)),
+  async ({ runId, to, text }) =>
+    result(summarize(reviews.send(runId, to, text))),
 );
 server.registerTool(
   "review_wait",
@@ -227,7 +293,7 @@ server.registerTool(
   "review_collect",
   {
     description:
-      "When reviewers are ready, close this cycle and produce its Markdown review artifact. The agent evaluates it, implements appropriate feedback, and may start another cycle.",
+      "When reviewers are idle or the cycle has ended, collect a Markdown artifact including any partial findings or failures. The agent evaluates it, implements appropriate feedback, and may start another cycle.",
     inputSchema: { runId: z.string().uuid() },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
@@ -246,8 +312,8 @@ server.registerTool(
   },
   async ({ runId, after }) =>
     result({
-      run: store.get(runId, false),
-      messages: store.messages(runId, after, 6, false),
+      run: summarize(store.get(runId, false)),
+      ...store.page(runId, after),
     }),
 );
 server.registerTool(
@@ -257,7 +323,7 @@ server.registerTool(
     inputSchema: { runId: z.string().uuid() },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
-  async ({ runId }) => result(reviews.stop(runId)),
+  async ({ runId }) => result(summarize(reviews.stop(runId))),
 );
 server.registerTool(
   "review_room_state",
@@ -267,7 +333,7 @@ server.registerTool(
     annotations: { readOnlyHint: true },
     _meta: { ui: { visibility: ["app"] } },
   },
-  async () => result({ runs: store.list() }),
+  async () => result({ runs: store.list().map(summarize) }),
 );
 server.registerTool(
   "review_room_discussion",

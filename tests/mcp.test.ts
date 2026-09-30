@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { settingsSchema } from "../src/schema";
+import { nativeSettingsSchema as settingsSchema } from "../src/model-settings";
 test("native settings, agent tools, and observational panel are discoverable", async () => {
   const dir = await mkdtemp(join(tmpdir(), "review-room-mcp-"));
   const client = new Client({ name: "test", version: "1" });
@@ -27,6 +27,9 @@ test("native settings, agent tools, and observational panel are discoverable", a
         stderr: "pipe",
       }),
     );
+    expect(
+      client.getServerCapabilities()?.experimental?.["openai/settings"],
+    ).toEqual({ readTool: "settings.read", updateTool: "settings.update" });
     const tools = (await client.listTools()).tools;
     expect(tools.map((t) => t.name)).toContain("review_wait");
     expect(tools.map((t) => t.name)).not.toContain("start_checkpoint_review");
@@ -43,7 +46,7 @@ test("native settings, agent tools, and observational panel are discoverable", a
     expect(read.values.reuseSessions).toBe(false);
     await client.callTool({
       name: "settings.update",
-      arguments: { set: { claudeEnabled: true, claudeModels: "opus" } },
+      arguments: { set: { claudeEnabled: true } },
     });
     const next = z
       .object({ values: settingsSchema })
@@ -51,7 +54,13 @@ test("native settings, agent tools, and observational panel are discoverable", a
         (await client.callTool({ name: "settings.read", arguments: {} }))
           .structuredContent,
       );
-    expect(next.values.claudeModels).toBe("opus");
+    expect(next.values.claudeEnabled).toBe(true);
+    expect(Object.keys(next.values)).not.toContain("claudeModels");
+    expect(tools.map((t) => t.name)).toContain("choose_claude_models");
+    const picker = await client.readResource({
+      uri: "ui://review-room/model-picker",
+    });
+    expect(picker.contents[0]).toHaveProperty("text");
     expect(next.values.reuseSessions).toBe(false);
     const resource = await client.readResource({
       uri: "ui://review-room/panel-v2",
