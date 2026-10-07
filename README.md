@@ -2,9 +2,9 @@
 
 A local Codex plugin for agent-led code reviews with Codex, Claude Code, OpenCode, and Pi. Your chat agent chooses enabled reviewers, discusses their findings, and collects a Markdown report. A native panel shows review cards, chat titles, and the conversation between reviewers.
 
-[![Review Room: browse reviews, follow reviewer discussions, and choose allowed models](docs/media/walkthrough.gif)](https://github.com/limineol/review-room/releases/download/v0.4.0/review-room-walkthrough.mp4)
+![Review Room: browse reviews, follow reviewer discussions, and choose allowed models](docs/media/walkthrough.gif)
 
-[Watch the 35-second walkthrough](https://github.com/limineol/review-room/releases/download/v0.4.0/review-room-walkthrough.mp4) · [Browse the screenshots](#screenshots)
+[Browse the screenshots](#screenshots)
 
 *The walkthrough and screenshots show the v0.4.0 interface with example review data and model choices.*
 
