@@ -2,6 +2,12 @@
 
 A local Codex plugin for agent-led code reviews with Codex, Claude Code, OpenCode, and Pi. Your chat agent chooses enabled reviewers, discusses their findings, and collects a Markdown report. A native panel shows review cards, chat titles, and the conversation between reviewers.
 
+[![Review Room: browse reviews, follow reviewer discussions, and choose allowed models](docs/media/walkthrough.gif)](https://github.com/limineol/review-room/releases/download/v0.4.0/review-room-walkthrough.mp4)
+
+[Watch the 35-second walkthrough](https://github.com/limineol/review-room/releases/download/v0.4.0/review-room-walkthrough.mp4) · [Browse the screenshots](#screenshots)
+
+*The walkthrough and screenshots show the v0.4.0 interface with example review data and model choices.*
+
 ## Install in Codex
 
 Install [Bun](https://bun.sh/) and sign in to at least one supported CLI. Review Room targets macOS and Linux. The repository includes its bundled runtime, so installing the plugin does not require a dependency install or build.
@@ -48,6 +54,20 @@ The panel renders sanitized Markdown, provider icons, and message bubbles. It do
 Sessions continue within a cycle. **Reuse reviewer sessions between cycles** defaults off. When enabled, reuse is scoped to the room, repository, reviewer name, harness, and model. Settings also bound reviewers per cycle, total turns, and per-turn timeouts.
 
 One failed reviewer does not discard other findings. Partial reports identify failures. Interrupted or expired sessions are reported, and missing saved history is retried once with a fresh session and recent discussion context. Active work depends on its MCP process remaining alive; ready findings survive restarts.
+
+## Screenshots
+
+**Review cards** keep the originating chat, project, reviewers, and status together.
+
+![Review cards showing chat titles, reviewer models, and review status](docs/media/reviews.jpg)
+
+**The discussion** preserves the brief, findings, follow-up questions, and saved report.
+
+![A reviewer finding with a source reference and suggested regression test](docs/media/discussion.jpg)
+
+**Model selection** uses a searchable catalog with readable names and explicit choices.
+
+<img src="docs/media/models.jpg" alt="Codex model picker with searchable names, checkboxes, and a Save changes button" width="480">
 
 ## Agent tools
 
