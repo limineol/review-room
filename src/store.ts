@@ -9,6 +9,7 @@ import {
   runSchema,
   messageSchema,
   participantSchema,
+  threadTitleSchema,
   type Settings,
   type Start,
   type Run,
@@ -56,6 +57,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS participants (run TEXT NOT NULL,name TEXT NOT NULL,harness TEXT NOT NULL,model TEXT NOT NULL,sessionId TEXT,state TEXT NOT NULL,PRIMARY KEY(run,name));
       CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT,run TEXT NOT NULL,sender TEXT NOT NULL,recipient TEXT NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL,time TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS queue (id INTEGER PRIMARY KEY AUTOINCREMENT,run TEXT NOT NULL,reviewer TEXT NOT NULL,text TEXT NOT NULL,replyTo TEXT);
+      CREATE TABLE IF NOT EXISTS room_threads (roomId TEXT PRIMARY KEY, title TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS invalid_sessions (id TEXT PRIMARY KEY);
       CREATE INDEX IF NOT EXISTS message_run ON messages(run,id);`);
   }
@@ -140,9 +142,23 @@ export class Store {
           );
         this.enqueue(id, reviewer.name, config.prompt);
       }
+      if (config.threadTitle) this.setThreadTitle(roomId, config.threadTitle);
       this.message(id, "agent", "all", "message", config.prompt);
       return id;
     })();
+  }
+  setThreadTitle(roomId: string, threadTitle: string) {
+    const title = threadTitleSchema.parse(threadTitle);
+    if (
+      !this.db.query("SELECT id FROM cycles WHERE roomId=? LIMIT 1").get(roomId)
+    )
+      throw new Error("Review room not found.");
+    this.db
+      .query(
+        "INSERT INTO room_threads (roomId,title) VALUES (?,?) ON CONFLICT(roomId) DO UPDATE SET title=excluded.title",
+      )
+      .run(roomId, title);
+    return { roomId, threadTitle: title };
   }
   message(
     run: string,
@@ -341,6 +357,13 @@ export class Store {
     }
     return runSchema.parse({
       ...row,
+      threadTitle:
+        this.db
+          .query<
+            { title: string },
+            [string]
+          >("SELECT title FROM room_threads WHERE roomId=?")
+          .get(row.roomId)?.title ?? null,
       reviewers: this.db
         .query(
           "SELECT name,harness,model,sessionId,state FROM participants WHERE run=? ORDER BY rowid",

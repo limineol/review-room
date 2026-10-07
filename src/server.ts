@@ -17,6 +17,7 @@ import { Store } from "./store";
 import { Reviews, promptGuide } from "./runner";
 import {
   startSchema,
+  threadTitleSchema,
   settingsSchema,
   modelSchema,
   models,
@@ -24,7 +25,7 @@ import {
 } from "./schema";
 import { ModelSettings, nativeSettingsSchema } from "./model-settings";
 import { harnessId } from "./model-picker-schema";
-const version = "0.3.1";
+const version = "0.3.2";
 const server = new McpServer({ name: "review-room", version });
 const extensions = new OpenAIExtensions(server);
 const store = new Store(process.env.REVIEW_ROOM_DB);
@@ -259,7 +260,7 @@ server.registerTool(
   "review_start",
   {
     description:
-      "Start background reviewers on the live repository. The chat agent chooses enabled harness/model combinations and writes the prompt. Reuse this chat’s roomId for later cycles, or omit it for the first cycle. No frozen snapshot is created.",
+      "Start background reviewers on the live repository. The chat agent chooses enabled harness/model combinations and writes the prompt. Reuse this chat’s roomId for later cycles, or omit it for the first cycle. No frozen snapshot is created. Include the current chat title in threadTitle only when the host exposes it. Otherwise omit the field; do not guess from the repository or review label.",
     inputSchema: startSchema,
     annotations: {
       readOnlyHint: false,
@@ -268,6 +269,17 @@ server.registerTool(
     },
   },
   async (config) => result(summarize(await reviews.start(config))),
+);
+server.registerTool(
+  "review_set_thread_title",
+  {
+    description:
+      "Record the originating chat title for all review cycles in this room. Use a verified title from the current chat; this labels review history and does not rename the chat.",
+    inputSchema: { roomId: z.string().uuid(), threadTitle: threadTitleSchema },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
+  async ({ roomId, threadTitle }) =>
+    result(store.setThreadTitle(roomId, threadTitle)),
 );
 server.registerTool(
   "review_send",

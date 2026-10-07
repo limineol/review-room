@@ -9,7 +9,7 @@ import {
   reviewDate,
 } from "./panel-view";
 
-const app = new App({ name: "Review Room", version: "0.3.1" });
+const app = new App({ name: "Review Room", version: "0.3.2" });
 const get = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const refreshButton = iconButton("refresh", "Refresh reviews");
@@ -65,7 +65,7 @@ function render() {
       .value.trim()
       .toLowerCase();
     const filtered = runs.filter((r) =>
-      `${r.label} ${r.repo} ${r.reviewers.map((p) => `${p.name} ${p.model}`).join(" ")}`
+      `${r.label} ${r.threadTitle ?? ""} ${r.repo} ${r.reviewers.map((p) => `${p.name} ${p.model}`).join(" ")}`
         .toLowerCase()
         .includes(query),
     );
@@ -93,6 +93,10 @@ function render() {
   }
   const summary =
     current?.id === selected ? current : runs.find((r) => r.id === selected);
+  get("review-thread").replaceChildren(
+    icon("chat"),
+    el("span", "", summary?.threadTitle ?? "Chat not recorded"),
+  );
   get("review-title").textContent = summary?.label ?? "Loading review…";
   get("review-meta").textContent = summary
     ? `${projectName(summary.repo)} · ${reviewDate(summary.created)} · ${summary.turns} ${summary.turns === 1 ? "turn" : "turns"}`

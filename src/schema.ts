@@ -40,9 +40,16 @@ export const defaults: Settings = {
   maxTurns: 12,
   timeoutSeconds: 180,
 };
+export const threadTitleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[^\r\n]+$/, "Use a single-line chat title");
 export const startSchema = z
   .object({
     roomId: z.string().uuid().optional(),
+    threadTitle: threadTitleSchema.optional(),
     repo: z.string().min(1),
     label: z.string().trim().min(1).max(120),
     prompt: z.string().trim().min(1).max(12000),
@@ -82,6 +89,7 @@ export type Message = z.infer<typeof messageSchema>;
 export const runSchema = z.object({
   id: z.string(),
   roomId: z.string(),
+  threadTitle: threadTitleSchema.nullable().default(null),
   repo: z.string(),
   label: z.string(),
   prompt: z.string(),

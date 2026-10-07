@@ -20,7 +20,7 @@
     "check": "tsc --noEmit && tsc --noEmit -p spikes/events-probe",
     "test": "bun test"
   },
-  "version": "0.3.1",
+  "version": "0.3.2",
   "workspaces": [
     "spikes/events-probe"
   ],

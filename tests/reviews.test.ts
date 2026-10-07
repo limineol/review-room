@@ -346,3 +346,41 @@ test("all remains a valid recipient when there is only one reviewer", async () =
     done.messages.some((m) => m.recipient === "all" && m.sender === "A"),
   ).toBe(true);
 });
+
+test("chat titles persist per room, carry across cycles, and leave legacy reviews readable", async () => {
+  const { dir, store } = await setup(async () => ({
+    sessionId: null,
+    reply: { body: "No defects", messages: [] },
+  }));
+  const legacy = store.create(config(dir), "metadata-test");
+  const roomId = store.get(legacy).roomId;
+  expect(store.get(legacy).threadTitle).toBeNull();
+  expect(() => store.setThreadTitle(roomId, "\n ")).toThrow();
+  expect(() => store.setThreadTitle(roomId, "Chat\n## Fake finding")).toThrow(
+    "single-line",
+  );
+  store.setThreadTitle(roomId, "Create adversarial review plugin");
+  store.status(legacy, "completed");
+  const next = store.create({ ...config(dir), roomId }, "metadata-test");
+  const unrelated = store.create(
+    { ...config(dir), threadTitle: "Investigate recovery" },
+    "metadata-test",
+  );
+  expect(store.get(next).threadTitle).toBe("Create adversarial review plugin");
+  expect(store.get(unrelated).threadTitle).toBe("Investigate recovery");
+  const reopened = new Store(join(dir, "state.sqlite"));
+  try {
+    expect(reopened.get(legacy).threadTitle).toBe(
+      "Create adversarial review plugin",
+    );
+    reopened.setThreadTitle(roomId, "Improve Review Room");
+    expect(store.get(legacy).threadTitle).toBe("Improve Review Room");
+    expect(store.get(next).threadTitle).toBe("Improve Review Room");
+    expect(store.get(unrelated).threadTitle).toBe("Investigate recovery");
+    expect(() =>
+      reopened.setThreadTitle(crypto.randomUUID(), "Unknown chat"),
+    ).toThrow("not found");
+  } finally {
+    reopened.close();
+  }
+});

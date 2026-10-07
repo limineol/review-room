@@ -531,3 +531,37 @@ details[open] > summary > .icon:last-child {
     margin-left: 33px;
   }
 }
+
+.card-thread {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 15px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.card-thread .icon,
+.review-thread .icon {
+  width: 13px;
+  height: 13px;
+}
+.card-thread > span:last-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.card-thread + .card-title {
+  margin-top: 8px;
+}
+.review-thread {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+.review-thread span:last-child {
+  overflow-wrap: anywhere;
+}

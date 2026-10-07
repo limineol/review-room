@@ -28,13 +28,20 @@ export function reviewCard(run: RunSummary, open: () => void) {
   card.dataset.runId = run.id;
   card.setAttribute(
     "aria-label",
-    `Open review: ${run.label}. ${statusLabels[run.status]}. ${projectName(run.repo)}. ${run.reviewers.map((r) => modelName(r.model)).join(", ")}. ${run.turns} ${run.turns === 1 ? "turn" : "turns"}.`,
+    `Open review: ${run.label}. Chat: ${run.threadTitle ?? "not recorded"}. ${statusLabels[run.status]}. ${projectName(run.repo)}. ${run.reviewers.map((r) => modelName(r.model)).join(", ")}. ${run.turns} ${run.turns === 1 ? "turn" : "turns"}.`,
   );
   const top = el("span", "card-top");
   top.append(
     statusBadge(run.status),
     el("span", "card-date", reviewDate(run.created)),
   );
+  const thread = el("span", "card-thread");
+  thread.append(
+    icon("chat"),
+    el("span", "", run.threadTitle ?? "Chat not recorded"),
+  );
+  thread.title =
+    run.threadTitle ?? "This older review did not record its chat title.";
   const title = el(
     "span",
     "card-title",
@@ -60,7 +67,7 @@ export function reviewCard(run: RunSummary, open: () => void) {
     `${run.turns} ${run.turns === 1 ? "turn" : "turns"}`,
   );
   bottom.append(reviewers, turns, icon("arrow"));
-  card.append(top, title, project, bottom);
+  card.append(top, thread, title, project, bottom);
   card.onclick = open;
   return card;
 }

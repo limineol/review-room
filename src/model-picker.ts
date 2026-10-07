@@ -3,12 +3,7 @@ import { pickerSchema } from "./model-picker-schema";
 import { avatar, el, icon, iconButton, theme } from "./ui";
 import type { z } from "zod";
 
-declare global {
-  interface Window {
-    openai?: { requestClose?: () => void | Promise<void> };
-  }
-}
-const app = new App({ name: "Review Room model picker", version: "0.3.1" });
+const app = new App({ name: "Review Room model picker", version: "0.3.2" });
 const get = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const refreshButton = iconButton("refresh", "Refresh models");
@@ -75,12 +70,8 @@ function render() {
     );
 }
 async function closeAfterSave() {
-  if (typeof window.openai?.requestClose !== "function") {
-    get("status").textContent = "Saved. You can close this window.";
-    return;
-  }
   try {
-    await window.openai.requestClose();
+    await app.requestTeardown();
   } catch {
     get("status").textContent = "Saved. You can close this window.";
   }
@@ -145,14 +136,30 @@ app.ontoolresult = (response) => {
   get("status").textContent = state.stale ? "Using saved selections" : "";
   render();
 };
-app.addEventListener("hostcontextchanged", () => theme(app));
+function updateHost() {
+  theme(app);
+  const dimensions = app.getHostContext()?.containerDimensions;
+  document.documentElement.style.setProperty(
+    "--picker-height",
+    dimensions && "height" in dimensions ? `${dimensions.height}px` : "auto",
+  );
+  const maximum =
+    dimensions &&
+    ("height" in dimensions ? dimensions.height : dimensions.maxHeight);
+  document.documentElement.style.setProperty(
+    "--picker-max-height",
+    maximum ? `${maximum}px` : "none",
+  );
+}
+app.addEventListener("hostcontextchanged", updateHost);
+app.onteardown = async () => ({});
 refreshButton.onclick = () => void action(false);
 get("save").onclick = () => void action(true);
 get<HTMLInputElement>("search").oninput = render;
 render();
 try {
   await app.connect();
-  theme(app);
+  updateHost();
 } catch {
   get("error").textContent = "Could not connect to Review Room.";
 }

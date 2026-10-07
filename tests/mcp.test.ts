@@ -32,6 +32,7 @@ test("native settings, agent tools, and observational panel are discoverable", a
     ).toEqual({ readTool: "settings.read", updateTool: "settings.update" });
     const tools = (await client.listTools()).tools;
     expect(tools.map((t) => t.name)).toContain("review_wait");
+    expect(tools.map((t) => t.name)).toContain("review_set_thread_title");
     expect(tools.map((t) => t.name)).not.toContain("start_checkpoint_review");
     expect(
       tools.find((t) => t.name === "open_review_room")?._meta?.["openai/ui"],
