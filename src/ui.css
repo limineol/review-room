@@ -217,3 +217,13 @@ button {
     scroll-behavior: auto !important;
   }
 }
+
+.avatar.pi {
+  font-size: 24px;
+  font-family: ui-serif, serif;
+  color: light-dark(#a36632, #e2bb8d);
+  background: light-dark(#f6efe5, #383024);
+}
+.avatar.opencode {
+  background: light-dark(#efefed, #333331);
+}

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import {
   defaults,
+  harnesses,
   settingsSchema,
   models,
   runSchema,
@@ -70,8 +71,7 @@ export class Store {
   updateSettings(patch: Partial<Settings>) {
     return this.db.transaction(() => {
       const next = settingsSchema.parse({ ...this.settings(), ...patch });
-      models(next.codexModels);
-      models(next.claudeModels);
+      for (const harness of harnesses) models(next[`${harness}Models`]);
       this.db
         .query(
           "INSERT INTO settings VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",

@@ -1,52 +1,92 @@
 # Review Room
 
-A native Codex plugin for agent-controlled adversarial reviews. The agent in your chat discovers enabled local models, writes review prompts, launches reviewers, discusses their findings, collects a Markdown artifact, and implements appropriate feedback within your task's scope.
+A local Codex plugin for agent-led code reviews with Codex, Claude Code, OpenCode, and Pi. Your chat agent chooses enabled reviewers, discusses their findings, and collects a Markdown report. A native panel shows review cards, chat titles, and the conversation between reviewers.
 
-The overview shows reviews as cards with the originating chat title. Open a card for a conversation with reviewer icons, formatted message bubbles, an expandable review brief, and grouped activity updates. Start reviews and send follow-ups through the agent in your chat.
+## Install in Codex
 
-## Native settings
+Install [Bun](https://bun.sh/) and sign in to at least one supported CLI. Review Room targets macOS and Linux. The repository includes its bundled runtime, so installing the plugin does not require a dependency install or build.
 
-Open the plugin's Settings to enable Codex and/or Claude Code. **Choose Codex models…** and **Choose Claude models…** open searchable checkbox pickers with names and descriptions from each harness's model catalog. **Save changes** allows those models and asks the host to close the picker. The picker requests closure through the MCP Apps host bridge after persistence succeeds. Discovery uses Codex app-server `model/list` and Claude's initialization catalog without running a model turn. It does not promise account access.
+```sh
+codex plugin marketplace add limineol/review-room
+codex plugin add review-room@review-room
+```
 
-Catalogs are cached for one minute; Refresh requests an update. A failed refresh retains the last catalog and existing selections. Previously selected models absent from the current catalog remain visible and may be deselected. Model identifiers are stored internally; refreshing never enables a model automatically.
+Reopen the plugin after installation. In **Plugins → Review Room → Settings**, enable a harness and choose its allowed models. New installations start with every harness disabled; adding or discovering a model never enables it automatically.
 
-Settings also control maximum reviewers (1–4), reviewer turns per cycle (1–30), and seconds per turn (30–600). **Reuse reviewer sessions between cycles** defaults off. Within a discussion, sessions continue for follow-ups. Cross-cycle reuse, when enabled, is scoped to the same room, repository, reviewer name, harness, and model.
+Ask your chat agent:
 
-New installations start with no enabled reviewers. Dani's installation was initialized once with the previously authorized GPT-5.5/Codex and Opus/Claude combinations. This was an installation step; new installations remain disabled until configured.
+> Review my current changes with Review Room. Discuss any uncertain findings with the reviewer before proposing fixes.
+
+The agent starts and manages reviews. Open Review Room to browse their cards and conversations. Prompts, review findings, and follow-up questions remain available in the discussion, with expandable briefs and activity groups.
+
+## Harnesses and models
+
+| Harness | Model discovery | Reviewer tools |
+| --- | --- | --- |
+| Codex | App-server model catalog | Read-only sandbox; user rules and plugins disabled |
+| Claude Code | CLI initialization catalog | Read, Grep, Glob; safe and restricted modes |
+| OpenCode | Configured provider/model catalog | Read, grep, glob, list; writes, shell, subagents, and external paths denied |
+| Pi | RPC model catalog | Read, grep, find, ls; repository path guard; extra extensions, MCP tools, and context files disabled |
+
+Model pickers show readable names and provider details. **Refresh** updates the catalog, and **Save changes** persists the allowlist before requesting that the host close the picker. Failed refreshes retain the previous choices. A catalog entry is not a guarantee that the account can invoke that model.
+
+Integration checks used OpenCode 1.18.34 and Pi 1.0.4. Pi completed live review, follow-up, and repository-boundary checks. OpenCode’s catalog and permission preflight are verified; its live model invocation is pending verification. Older CLIs that lack the required isolation or RPC flags are not supported.
+
+OpenCode and Pi use qualified model IDs such as `provider/model`. Their own CLI configuration supplies authentication; Review Room does not ask you to paste API keys into the plugin. Review requests use your provider account and can consume its quota or incur its normal charges.
+
+OpenCode's pure mode disables external plugins. Before a review, Review Room disables configured MCP servers for that process and checks the resolved agent permissions; it refuses to start if extra tools or external paths remain allowed. Providers that require an external authentication plugin may be unavailable in that mode. Pi starts only after confirming that Review Room's bundled read-only guard loaded. These tool restrictions are not an operating-system sandbox; use a separately isolated environment when you need stronger isolation.
+
+## Review workflow
+
+1. The chat agent discovers your enabled harness/model combinations.
+2. It writes a review brief against the live repository and starts a cycle.
+3. Reviewers inspect files and can ask the agent or another reviewer questions.
+4. The agent evaluates findings, collects the report, implements appropriate fixes, and requests another cycle when needed.
+
+The panel renders sanitized Markdown, provider icons, and message bubbles. It does not show private model reasoning. The originating chat title appears when the agent supplies a verified title; older unlabelled reviews show “Chat not recorded.”
+
+Sessions continue within a cycle. **Reuse reviewer sessions between cycles** defaults off. When enabled, reuse is scoped to the room, repository, reviewer name, harness, and model. Settings also bound reviewers per cycle, total turns, and per-turn timeouts.
+
+One failed reviewer does not discard other findings. Partial reports identify failures. Interrupted or expired sessions are reported, and missing saved history is retried once with a fresh session and recent discussion context. Active work depends on its MCP process remaining alive; ready findings survive restarts.
 
 ## Agent tools
 
-- `review_discover`: installed harnesses, enabled combinations, and limits.
-- `review_prompt_guide`: instructions for prompting and driving the loop.
-- `review_start`: start one or more background reviewers on actual repository files; include `threadTitle` to identify the originating chat.
-- `review_set_thread_title`: label an older room’s history with its verified chat title.
-- `review_send`: send agent follow-up questions to one reviewer or all.
-- `review_wait`: wait for published messages or a state change, using a cursor.
-- `review_collect`: close a ready cycle and save its Markdown discussion artifact.
-- `review_read` / `review_stop`: read status and messages, or cancel.
-- `open_review_room`: show the native panel, optionally selecting a run.
+| Tool | Purpose |
+| --- | --- |
+| `review_discover` | Installed harnesses, model catalogs, enabled combinations, and limits |
+| `review_prompt_guide` | Instructions for the review loop |
+| `review_start` | Start reviewers against a live repository; pass `threadTitle` when known |
+| `review_set_thread_title` | Label an existing room with its verified chat title |
+| `review_send` | Send a question to one reviewer or all |
+| `review_wait` | Wait for published messages using a cursor |
+| `review_collect` | Save the cycle's findings and discussion as Markdown |
+| `review_read` / `review_stop` | Read a cycle or stop its reviewers |
+| `open_review_room` | Open the native review panel |
 
-A checkpoint means "review now," not a stored code snapshot. The reviewer reads the live repository; the prompt should specify files or the comparison ref. Avoid changing the same area during inspection, or ask for revalidation after changes.
+`review_wait` is an active wait; Review Room does not wake an idle chat. A review reads current repository files, so avoid editing the same files during inspection or ask reviewers to recheck them afterward.
 
-Reviewers return findings and optional addressed questions. Peer questions and their answers are routed by the service without the main agent having to copy every message. The main agent decides when to collect, implement fixes, and request another cycle. If one reviewer fails, the others continue and collection produces a clearly marked partial artifact. Failed or interrupted cycles can also be collected for diagnostics. The turn budget prevents unbounded peer loops.
+## Data and runtime
 
-## Runtime and safety
+Review Room stores settings and history in `~/.local/share/review-room/agent-reviews.sqlite` and reports in `~/.local/share/review-room/artifacts/`. Native harnesses also retain their own session data; Pi's Review Room sessions live below the plugin's data directory. Source and prompts are sent through your selected CLI to its configured provider.
 
-Targets macOS/Linux with Bun 1.3.14 or later and signed-in local CLI accounts. Codex runs in a read-only sandbox with user configuration/rules and plugins disabled. Claude uses safe/restricted mode, Read/Grep/Glob only, and strict MCP configuration. Both can read actual code; neither is instructed to edit files or run tests. The main chat agent owns implementation and verification.
-
-The native panel applies host theme, font, and styling tokens. Published messages are rendered as sanitized Markdown; private model reasoning is not displayed. Artifact files and the SQLite database are local. Source is sent through the selected CLI accounts and remains subject to those providers' terms and limits.
-
-Jobs depend on the owning MCP process remaining alive. A stopped process interrupts active work; ready findings remain collectable after restart. A follow-up to a ready cycle can be adopted by the new worker. Missing CLI history is invalidated and retried once in a fresh session with recent discussion context. There is no idle-chat event wakeup: the agent actively uses `review_wait`. The event-protocol experiment remains in `spikes/events-probe` for reference and is no longer loaded by the production plugin.
-
-Data: `~/.local/share/review-room/agent-reviews.sqlite`. Artifacts: `~/.local/share/review-room/artifacts/`. Previous v0.1 history remains in `reviews.sqlite`; it is not migrated or deleted.
+Review Room has no hosted backend or developer telemetry service. It is a local MCP plugin. A hosted edition for the public ChatGPT directory is deferred; this release is distributed through GitHub and the Codex marketplace above.
 
 ## Development
+
+Use Bun 1.3.14 or later. Dependency versions are pinned.
 
 ```sh
 bun install --frozen-lockfile
 bun run check
 bun run build
 bun test
+bun run package /tmp/review-room-release
 ```
 
-The build bundles the MCP server and native panel. `mcp.json` is the portable manifest; `.mcp.json` and `.codex-plugin/plugin.json` provide Codex compatibility. Dependencies are exactly pinned. Zod is aligned with the Extensions SDK's supported version to keep native settings schemas type-compatible.
+`mcp.json` is the portable manifest; `.mcp.json` and `.codex-plugin/plugin.json` provide Codex compatibility. The four runtime files under `dist/` are committed so GitHub marketplace installs are ready to run. Rebuild them after source changes. `spikes/events-probe` is historical experimentation and is excluded from release archives.
+
+Report bugs or request features through [GitHub Issues](https://github.com/limineol/review-room/issues). Include the harness and version, but remove source code, credentials, and private review content from logs you share.
+
+## License
+
+[MIT](LICENSE), copyright Daniel Alvim. Bundled dependencies retain their [third-party notices](dist/THIRD_PARTY_NOTICES.txt). Provider icons retain the notices in [assets/ICONS-LICENSE.txt](assets/ICONS-LICENSE.txt).

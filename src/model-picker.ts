@@ -1,9 +1,10 @@
 import { App } from "@modelcontextprotocol/ext-apps";
+import { harnessNames } from "./schema";
 import { pickerSchema } from "./model-picker-schema";
 import { avatar, el, icon, iconButton, theme } from "./ui";
 import type { z } from "zod";
 
-const app = new App({ name: "Review Room model picker", version: "0.3.2" });
+const app = new App({ name: "Review Room model picker", version: "0.4.0" });
 const get = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const refreshButton = iconButton("refresh", "Refresh models");
@@ -17,8 +18,7 @@ function render() {
   refreshButton.disabled = busy || !state;
   get("count").textContent = `${selected.size} selected`;
   if (!state) return;
-  get("title").textContent =
-    `${state.harness === "codex" ? "Codex" : "Claude"} models`;
+  get("title").textContent = `${harnessNames[state.harness]} models`;
   get("provider-icon").replaceChildren(avatar(state.harness));
   const filter = get<HTMLInputElement>("search").value.trim().toLowerCase();
   const choices = [...state.choices];

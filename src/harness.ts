@@ -4,6 +4,10 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { z } from "zod";
 import { executable } from "./discovery";
+import { prepareOpenCode } from "./opencode-preflight";
+import { redactDiagnostic, reviewProtocol } from "./review-protocol";
+import { piSessionDirectory } from "./harness-policy";
+export { argumentsFor } from "./review-protocol";
 import { replySchema, type Participant, type Reply } from "./schema";
 export type Invocation = {
   reviewer: Participant;
@@ -32,86 +36,38 @@ export async function writeReplySchema(directory: string) {
   await rename(temporary, path);
   return path;
 }
-export function argumentsFor(input: Invocation): string[] {
-  const { reviewer, repo, schemaFile } = input;
-  if (reviewer.harness === "claude")
-    return [
-      "-p",
-      "--model",
-      reviewer.model,
-      "--output-format",
-      "stream-json",
-      "--verbose",
-      "--json-schema",
-      jsonSchema,
-      "--safe-mode",
-      "--restricted",
-      "--tools",
-      "Read,Grep,Glob",
-      "--allowedTools",
-      "Read,Grep,Glob",
-      "--strict-mcp-config",
-      "--permission-mode",
-      "dontAsk",
-      ...(reviewer.sessionId
-        ? ["--resume", reviewer.sessionId]
-        : ["--session-id", crypto.randomUUID()]),
-    ];
-  return [
-    "exec",
-    "--sandbox",
-    "read-only",
-    "--ignore-user-config",
-    "--ignore-rules",
-    "--disable",
-    "plugins",
-    "--json",
-    "--model",
-    reviewer.model,
-    "--output-schema",
-    schemaFile,
-    ...(reviewer.sessionId
-      ? ["resume", reviewer.sessionId, "-"]
-      : ["-C", repo, "-"]),
-  ];
-}
-const eventSchema = z.object({
-  type: z.string(),
-  session_id: z.string().optional(),
-  thread_id: z.string().optional(),
-  is_error: z.boolean().optional(),
-  result: z.string().optional(),
-  structured_output: z.unknown().optional(),
-  item: z.object({ type: z.string(), text: z.string().optional() }).optional(),
-  message: z
-    .object({
-      content: z.array(
-        z.object({
-          type: z.string(),
-          name: z.string().optional(),
-          text: z.string().optional(),
-        }),
-      ),
-    })
-    .optional(),
-});
 export const invoke: Invoke = async (input) => {
+  const deadline = Date.now() + input.timeoutSeconds * 1000;
   const command = await executable(input.reviewer.harness);
   input.signal.throwIfAborted();
   if (!command) throw new Error(`${input.reviewer.harness} is not installed.`);
+  if (input.reviewer.harness === "pi")
+    await mkdir(piSessionDirectory(input), { recursive: true, mode: 0o700 });
+  const protocol = reviewProtocol(input);
+  const prepared =
+    input.reviewer.harness === "opencode"
+      ? await prepareOpenCode(command, input.repo, input.signal, deadline)
+      : {};
+  input.signal.throwIfAborted();
+  if (Date.now() >= deadline) throw new Error("Reviewer time limit exceeded");
   return await new Promise<InvocationResult>((resolve, reject) => {
-    const child = spawn(command, argumentsFor(input), {
+    const child = spawn(command, protocol.args, {
       cwd: input.repo,
       detached: process.platform !== "win32",
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, CLAUDECODE: undefined },
+      env: {
+        ...process.env,
+        CLAUDECODE: undefined,
+        ...protocol.env,
+        ...prepared,
+      },
     });
     let buffer = "",
       errors = "",
       bytes = 0,
       failure: Error | undefined,
-      reply: Reply | undefined,
-      sessionId = input.reviewer.sessionId;
+      completed: InvocationResult | undefined,
+      closeTimeout: ReturnType<typeof setTimeout> | undefined;
     const shown = new Set<string>();
     const activity = (text: string) => {
       if (!shown.has(text)) {
@@ -119,8 +75,7 @@ export const invoke: Invoke = async (input) => {
         input.activity(text);
       }
     };
-    const stop = (reason: string) => {
-      failure ??= new Error(reason);
+    const terminate = () => {
       if (!child.pid) return;
       try {
         if (process.platform === "win32") child.kill("SIGKILL");
@@ -132,51 +87,48 @@ export const invoke: Invoke = async (input) => {
           failure = new Error("Could not stop reviewer process.");
       }
     };
+    const stop = (reason: string) => {
+      failure ??= new Error(reason);
+      terminate();
+    };
     const abort = () => stop("Review cancelled");
     input.signal.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(
       () => stop("Reviewer time limit exceeded"),
-      input.timeoutSeconds * 1000,
+      Math.max(1, deadline - Date.now()),
     );
+    const write = (value: object) =>
+      child.stdin.write(JSON.stringify(value) + "\n");
     const consume = (line: string) => {
-      if (!line.trim()) return;
+      if (!line.trim() || failure || completed) return;
+      let event: unknown;
       try {
-        const parsed = eventSchema.safeParse(JSON.parse(line));
-        if (!parsed.success) return;
-        const event = parsed.data;
-        if (event.thread_id) sessionId = event.thread_id;
-        if (event.session_id) sessionId = event.session_id;
-        if (event.type === "result") {
-          if (event.is_error)
-            failure = new Error(event.result ?? "Reviewer failed.");
-          else
-            reply = replySchema.parse(
-              event.structured_output ?? JSON.parse(event.result ?? "null"),
-            );
+        event = JSON.parse(line);
+      } catch {
+        return;
+      }
+      try {
+        if (protocol.consume(event, write, activity)) {
+          completed = protocol.result();
+          clearTimeout(timeout);
+          child.stdin.end();
+          closeTimeout = setTimeout(
+            terminate,
+            Math.max(1, Math.min(3000, deadline - Date.now())),
+          );
         }
-        if (
-          event.type === "item.completed" &&
-          event.item?.type === "agent_message"
-        )
-          reply = replySchema.parse(JSON.parse(event.item.text ?? "null"));
-        if (event.item?.type === "command_execution")
-          activity("Inspecting repository with read-only commands");
-        for (const block of event.message?.content ?? [])
-          if (
-            block.type === "tool_use" &&
-            ["Read", "Grep", "Glob"].includes(block.name ?? "")
-          )
-            activity(`Using ${block.name} to inspect code`);
       } catch (error) {
-        if (error instanceof SyntaxError) return;
-        failure = new Error(
-          "Reviewer returned an invalid structured response.",
+        stop(
+          error instanceof Error
+            ? redactDiagnostic(error.message)
+            : "Reviewer returned an invalid response.",
         );
       }
     };
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
+      if (completed) return;
       bytes += Buffer.byteLength(chunk);
       if (bytes > 2000000) {
         stop("Reviewer output exceeded 2 MB");
@@ -193,18 +145,20 @@ export const invoke: Invoke = async (input) => {
       errors = (errors + chunk).slice(-4000);
     });
     child.on("error", (error) => {
-      failure = error;
+      if (!completed) failure = error;
     });
     child.on("close", (code) => {
       clearTimeout(timeout);
+      clearTimeout(closeTimeout);
       input.signal.removeEventListener("abort", abort);
       consume(buffer);
-      if (!failure && code !== 0)
+      if (!failure && !completed && code !== 0)
         failure = new Error(
-          errors
+          redactDiagnostic(errors)
             .split("\n")
             .filter((l) => /^ERROR:|^Error:/.test(l))
-            .at(-1) ?? `Reviewer exited ${code}: ${errors.slice(-500)}`,
+            .at(-1) ??
+            `Reviewer exited ${code}: ${redactDiagnostic(errors).slice(-500)}`,
         );
       if (failure) {
         const missing =
@@ -216,11 +170,16 @@ export const invoke: Invoke = async (input) => {
             ? new MissingSessionError(failure.message)
             : failure,
         );
-      } else if (!reply)
-        reject(new Error("Reviewer did not return a review response."));
-      else resolve({ reply, sessionId });
+      } else {
+        try {
+          resolve(completed ?? protocol.result());
+        } catch (error) {
+          reject(error);
+        }
+      }
     });
     child.stdin.on("error", () => {});
-    child.stdin.end(input.prompt);
+    if (input.reviewer.harness === "pi") protocol.start(write);
+    else child.stdin.end(protocol.prompt);
   });
 };

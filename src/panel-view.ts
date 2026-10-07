@@ -1,7 +1,13 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { avatar, el, icon, modelName, statusBadge, statusLabels } from "./ui";
-import type { Message, Participant, Run, RunSummary } from "./schema";
+import {
+  harnessNames,
+  type Message,
+  type Participant,
+  type Run,
+  type RunSummary,
+} from "./schema";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -78,7 +84,7 @@ export function participantChip(reviewer: Participant) {
     avatar(reviewer.harness),
     el("span", "", modelName(reviewer.model)),
   );
-  chip.title = `${speakerName(reviewer.name)} · ${reviewer.harness === "claude" ? "Claude Code" : "Codex"}`;
+  chip.title = `${speakerName(reviewer.name)} · ${harnessNames[reviewer.harness]}`;
   if (reviewer.state === "running") {
     const indicator = el("span", "working-dot");
     indicator.append(el("span", "sr-only", "Reviewing"));

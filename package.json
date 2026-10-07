@@ -18,13 +18,19 @@
   "scripts": {
     "build": "bun build.ts",
     "check": "tsc --noEmit && tsc --noEmit -p spikes/events-probe",
-    "test": "bun test"
+    "test": "bun test",
+    "package": "bun run build && bun scripts/package.ts"
   },
-  "version": "0.3.2",
+  "version": "0.4.0",
   "workspaces": [
     "spikes/events-probe"
   ],
   "overrides": {
     "zod": "4.4.3"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/limineol/review-room.git"
   }
 }

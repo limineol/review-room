@@ -4,7 +4,14 @@ export const modelSchema = z
   .trim()
   .min(1)
   .max(160)
-  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/\[\]-]*$/);
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/@\[\]-]*$/);
+export const harnesses = ["codex", "claude", "opencode", "pi"] as const;
+export const harnessNames = {
+  codex: "Codex",
+  claude: "Claude Code",
+  opencode: "OpenCode",
+  pi: "Pi",
+};
 export const reviewerSchema = z.object({
   name: z
     .string()
@@ -15,7 +22,7 @@ export const reviewerSchema = z.object({
       (name) => !["agent", "all", "Review Room"].includes(name),
       "Reserved reviewer name",
     ),
-  harness: z.enum(["codex", "claude"]),
+  harness: z.enum(harnesses),
   model: modelSchema,
 });
 export type Reviewer = z.infer<typeof reviewerSchema>;
@@ -24,6 +31,10 @@ export const settingsSchema = z.object({
   codexModels: z.string().max(4000),
   claudeEnabled: z.boolean(),
   claudeModels: z.string().max(4000),
+  opencodeEnabled: z.boolean().default(false),
+  opencodeModels: z.string().max(4000).default(""),
+  piEnabled: z.boolean().default(false),
+  piModels: z.string().max(4000).default(""),
   reuseSessions: z.boolean(),
   maxReviewers: z.number().int().min(1).max(4),
   maxTurns: z.number().int().min(1).max(30),
@@ -35,6 +46,10 @@ export const defaults: Settings = {
   codexModels: "",
   claudeEnabled: false,
   claudeModels: "",
+  opencodeEnabled: false,
+  opencodeModels: "",
+  piEnabled: false,
+  piModels: "",
   reuseSessions: false,
   maxReviewers: 2,
   maxTurns: 12,
@@ -143,9 +158,8 @@ export function models(text: string) {
   ];
 }
 export function enabled(settings: Settings, reviewer: Reviewer) {
-  return reviewer.harness === "codex"
-    ? settings.codexEnabled &&
-        models(settings.codexModels).includes(reviewer.model)
-    : settings.claudeEnabled &&
-        models(settings.claudeModels).includes(reviewer.model);
+  return (
+    settings[`${reviewer.harness}Enabled`] &&
+    models(settings[`${reviewer.harness}Models`]).includes(reviewer.model)
+  );
 }

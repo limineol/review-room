@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { executable } from "./discovery";
 import { modelSchema } from "./schema";
+import { openCodeEnvironment, piIsolation } from "./harness-policy";
 
 import {
   type HarnessId,
@@ -45,6 +46,55 @@ const claudeCatalog = z.object({
   ),
 });
 
+const extraModel = z.object({
+  id: modelSchema,
+  name: z.string(),
+  provider: z.string(),
+  contextWindow: z.number().optional(),
+});
+const piCatalog = z.object({
+  type: z.literal("response"),
+  command: z.literal("get_available_models"),
+  success: z.literal(true),
+  data: z.object({ models: z.array(extraModel) }),
+});
+const openCodeModel = z.object({
+  id: modelSchema,
+  providerID: z.string(),
+  name: z.string(),
+  limit: z.object({ context: z.number().optional() }).optional(),
+  capabilities: z.object({ toolcall: z.boolean().optional() }).optional(),
+});
+export function parseOpenCodeModels(output: string): ModelChoice[] {
+  const choices: ModelChoice[] = [];
+  let id: string | undefined;
+  let json: string[] = [];
+  for (const line of output.replaceAll("\r\n", "\n").split("\n")) {
+    if (!id) {
+      if (line.trim()) id = modelSchema.parse(line.trim());
+      continue;
+    }
+    json.push(line);
+    if (line.trimEnd() !== "}") continue;
+    const model = openCodeModel.parse(JSON.parse(json.join("\n")));
+    if (id !== `${model.providerID}/${model.id}`)
+      throw new Error("Model identifier mismatch");
+    if (model.capabilities?.toolcall !== false)
+      choices.push({
+        id,
+        name: model.name,
+        description:
+          model.providerID +
+          (model.limit?.context
+            ? ` · ${model.limit.context.toLocaleString("en-US")} context tokens`
+            : ""),
+      });
+    id = undefined;
+    json = [];
+  }
+  if (id || json.length) throw new Error("Incomplete model catalog");
+  return choices;
+}
 export async function readCatalog(
   harness: HarnessId,
   command?: string,
@@ -59,20 +109,33 @@ export async function readCatalog(
         path,
         harness === "codex"
           ? ["app-server"]
-          : [
-              "-p",
-              "--input-format",
-              "stream-json",
-              "--output-format",
-              "stream-json",
-              "--verbose",
-              "--safe-mode",
-              "--strict-mcp-config",
-              "--tools",
-              "",
-              "--no-session-persistence",
-            ],
-        { cwd, detached: true, stdio: ["pipe", "pipe", "pipe"] },
+          : harness === "opencode"
+            ? ["models", "--pure", "--verbose"]
+            : harness === "pi"
+              ? ["--mode", "rpc", ...piIsolation, "--no-tools", "--no-session"]
+              : [
+                  "-p",
+                  "--input-format",
+                  "stream-json",
+                  "--output-format",
+                  "stream-json",
+                  "--verbose",
+                  "--safe-mode",
+                  "--strict-mcp-config",
+                  "--tools",
+                  "",
+                  "--no-session-persistence",
+                ],
+        {
+          cwd,
+          detached: process.platform !== "win32",
+          stdio: ["pipe", "pipe", "pipe"],
+          env: {
+            ...process.env,
+            ...(harness === "opencode" ? openCodeEnvironment : {}),
+            PI_TELEMETRY: "0",
+          },
+        },
       );
       let settled = false,
         buffer = "",
@@ -86,7 +149,8 @@ export async function readCatalog(
         clearTimeout(timer);
         if (child.pid) {
           try {
-            process.kill(-child.pid, "SIGKILL");
+            if (process.platform === "win32") child.kill("SIGKILL");
+            else process.kill(-child.pid, "SIGKILL");
           } catch {
             /* Already exited. */
           }
@@ -118,11 +182,24 @@ export async function readCatalog(
         timeoutMs,
       );
       child.on("error", () => finish(new Error(`Could not start ${harness}.`)));
-      child.on("close", () =>
-        finish(
-          new Error(`${harness} closed before returning its model catalog.`),
-        ),
-      );
+      child.on("close", (code) => {
+        if (settled) return;
+        if (harness === "opencode" && code === 0) {
+          try {
+            choices.push(...parseOpenCodeModels(buffer));
+            finish();
+          } catch {
+            finish(
+              new Error(
+                "OpenCode returned an unsupported model catalog response.",
+              ),
+            );
+          }
+        } else
+          finish(
+            new Error(`${harness} closed before returning its model catalog.`),
+          );
+      });
       child.stdin.on("error", () =>
         finish(new Error(`${harness} closed its catalog connection.`)),
       );
@@ -138,13 +215,40 @@ export async function readCatalog(
         if (bytes > 2_000_000)
           return finish(new Error("Model catalog exceeded the output limit."));
         buffer += chunk;
+        if (harness === "opencode") return;
         let newline: number;
         while (!settled && (newline = buffer.indexOf("\n")) >= 0) {
           const line = buffer.slice(0, newline);
           buffer = buffer.slice(newline + 1);
           if (!line.trim()) continue;
           try {
-            const frame = frameSchema.parse(JSON.parse(line));
+            const value: unknown = JSON.parse(line);
+            if (harness === "pi") {
+              const response = z
+                .object({ type: z.string(), command: z.string().optional() })
+                .parse(value);
+              if (
+                response.type !== "response" ||
+                response.command !== "get_available_models"
+              )
+                continue;
+              choices.push(
+                ...piCatalog
+                  .parse(value)
+                  .data.models.map((m) => ({
+                    id: modelSchema.parse(`${m.provider}/${m.id}`),
+                    name: m.name,
+                    description:
+                      m.provider +
+                      (m.contextWindow
+                        ? ` · ${m.contextWindow.toLocaleString("en-US")} context tokens`
+                        : ""),
+                  })),
+              );
+              finish();
+              continue;
+            }
+            const frame = frameSchema.parse(value);
             if (harness === "claude") {
               if (
                 frame.type !== "control_response" ||
@@ -204,10 +308,13 @@ export async function readCatalog(
             clientInfo: {
               name: "review_room",
               title: "Review Room",
-              version: "0.2.1",
+              version: "0.4.0",
             },
           },
         });
+      else if (harness === "pi")
+        send({ id: "catalog", type: "get_available_models" });
+      else if (harness === "opencode") child.stdin.end();
       else
         send({
           request_id: "catalog",

@@ -17,6 +17,8 @@ import { Store } from "./store";
 import { Reviews, promptGuide } from "./runner";
 import {
   startSchema,
+  harnesses,
+  harnessNames,
   threadTitleSchema,
   settingsSchema,
   modelSchema,
@@ -25,7 +27,7 @@ import {
 } from "./schema";
 import { ModelSettings, nativeSettingsSchema } from "./model-settings";
 import { harnessId } from "./model-picker-schema";
-const version = "0.3.2";
+const version = "0.4.0";
 const server = new McpServer({ name: "review-room", version });
 const extensions = new OpenAIExtensions(server);
 const store = new Store(process.env.REVIEW_ROOM_DB);
@@ -52,6 +54,14 @@ extensions.settings?.register({
       schema: settingsSchema.shape.claudeEnabled,
       title: "Enable Claude Code",
     },
+    opencodeEnabled: {
+      schema: nativeSettingsSchema.shape.opencodeEnabled,
+      title: "Enable OpenCode",
+    },
+    piEnabled: {
+      schema: nativeSettingsSchema.shape.piEnabled,
+      title: "Enable Pi",
+    },
     reuseSessions: {
       schema: settingsSchema.shape.reuseSessions,
       title: "Reuse reviewer sessions between cycles",
@@ -75,20 +85,14 @@ extensions.settings?.register({
     {
       kind: "group",
       title: "Harnesses and models",
-      items: [
-        { kind: "property", property: "codexEnabled" },
+      items: harnesses.flatMap((harness) => [
+        { kind: "property" as const, property: `${harness}Enabled` as const },
         {
-          kind: "tool",
-          tool: "choose_codex_models",
-          title: "Choose Codex models…",
+          kind: "tool" as const,
+          tool: `choose_${harness}_models`,
+          title: `Choose ${harnessNames[harness]} models…`,
         },
-        { kind: "property", property: "claudeEnabled" },
-        {
-          kind: "tool",
-          tool: "choose_claude_models",
-          title: "Choose Claude models…",
-        },
-      ],
+      ]),
     },
     {
       kind: "group",
@@ -124,12 +128,12 @@ registerAppResource(server, "model-picker", pickerUri, {}, async () => ({
     },
   ],
 }));
-for (const harness of ["codex", "claude"] as const) {
+for (const harness of harnesses) {
   registerAppTool(
     server,
     `choose_${harness}_models`,
     {
-      title: `Choose ${harness === "codex" ? "Codex" : "Claude"} models`,
+      title: `Choose ${harnessNames[harness]} models`,
       description: "Choose allowed reviewer models in plugin Settings.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
@@ -210,9 +214,9 @@ server.registerTool(
     const settings = store.settings();
     const harnesses = await Promise.all(
       (await discover()).map(async (h) => {
-        if (h.id !== "codex" && h.id !== "claude") return h;
-        if (!settings[`${h.id}Enabled`]) return h;
-        const catalog = await modelSettings.read(h.id);
+        const id = harnessId.safeParse(h.id);
+        if (!id.success || !settings[`${id.data}Enabled`]) return h;
+        const catalog = await modelSettings.read(id.data);
         return {
           ...h,
           models: catalog.choices.map((m) => m.id),
@@ -230,19 +234,14 @@ server.registerTool(
       harnesses,
       enabled: harnesses
         .filter((h) => h.runnable)
-        .flatMap((h) =>
-          h.id === "codex" && settings.codexEnabled
-            ? models(settings.codexModels).map((model) => ({
-                harness: "codex",
-                model,
-              }))
-            : h.id === "claude" && settings.claudeEnabled
-              ? models(settings.claudeModels).map((model) => ({
-                  harness: "claude",
-                  model,
-                }))
-              : [],
-        ),
+        .flatMap((h) => {
+          const id = harnessId.safeParse(h.id);
+          if (!id.success || !settings[`${id.data}Enabled`]) return [];
+          return models(settings[`${id.data}Models`]).map((model) => ({
+            harness: id.data,
+            model,
+          }));
+        }),
     });
   },
 );

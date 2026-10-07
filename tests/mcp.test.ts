@@ -30,7 +30,13 @@ test("native settings, agent tools, and observational panel are discoverable", a
     expect(
       client.getServerCapabilities()?.experimental?.["openai/settings"],
     ).toEqual({ readTool: "settings.read", updateTool: "settings.update" });
+    const packageInfo = z
+      .object({ version: z.string() })
+      .parse(await Bun.file("package.json").json());
+    expect(client.getServerVersion()?.version).toBe(packageInfo.version);
     const tools = (await client.listTools()).tools;
+    expect(tools.map((t) => t.name)).toContain("choose_opencode_models");
+    expect(tools.map((t) => t.name)).toContain("choose_pi_models");
     expect(tools.map((t) => t.name)).toContain("review_wait");
     expect(tools.map((t) => t.name)).toContain("review_set_thread_title");
     expect(tools.map((t) => t.name)).not.toContain("start_checkpoint_review");
@@ -45,6 +51,8 @@ test("native settings, agent tools, and observational panel are discoverable", a
       .object({ values: settingsSchema })
       .parse(settings.structuredContent);
     expect(read.values.reuseSessions).toBe(false);
+    expect(read.values.opencodeEnabled).toBe(false);
+    expect(read.values.piEnabled).toBe(false);
     await client.callTool({
       name: "settings.update",
       arguments: { set: { claudeEnabled: true } },

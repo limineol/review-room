@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { z } from "zod";
-import type { harnessSchema } from "./schema";
+import { harnesses, type harnessSchema } from "./schema";
 
 const candidates = [
   ["codex", "Codex"],
@@ -48,10 +48,11 @@ export async function discover(): Promise<z.infer<typeof harnessSchema>[]> {
       if (!path) return undefined;
       return {
         id,
-        name:
-          id === "codex" || id === "claude" ? name : `${id} (possible ${name})`,
+        name: harnesses.some((h) => h === id)
+          ? name
+          : `${id} (possible ${name})`,
         path,
-        runnable: id === "codex" || id === "claude",
+        runnable: harnesses.some((h) => h === id),
         models: [],
         modelSource:
           "Use the harness model catalog; account access is checked when run",

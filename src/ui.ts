@@ -19,6 +19,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 const paths = {
+  code: '<path d="m8 6-6 6 6 6m8-12 6 6-6 6M14 4l-4 16"/>',
   back: '<path d="m14 5-7 7 7 7M7 12h14"/>',
   arrow: '<path d="m9 5 7 7-7 7"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.34-5.66L20 8M20 3v5h-5"/>',
@@ -39,7 +40,9 @@ export function icon(name: keyof typeof paths) {
 export function avatar(harness?: Participant["harness"]) {
   const span = el("span", `avatar ${harness ?? "agent"}`);
   span.setAttribute("aria-hidden", "true");
-  if (harness) span.innerHTML = harness === "claude" ? claude : openai;
+  if (harness === "pi") span.textContent = "π";
+  else if (harness === "opencode") span.append(icon("code"));
+  else if (harness) span.innerHTML = harness === "claude" ? claude : openai;
   else span.append(icon("chat"));
   return span;
 }
@@ -51,7 +54,9 @@ export function iconButton(name: keyof typeof paths, label: string) {
   button.append(icon(name));
   return button;
 }
-export function modelName(model: string) {
+export function modelName(model: string): string {
+  if (model.includes("/"))
+    return modelName(model.slice(model.lastIndexOf("/") + 1));
   if (model.startsWith("gpt-"))
     return model
       .replace(/^gpt-/, "GPT-")

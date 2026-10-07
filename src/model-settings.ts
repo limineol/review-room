@@ -3,10 +3,17 @@ import type { Store } from "./store";
 import { ModelCatalogs } from "./model-catalog";
 import type { HarnessId } from "./model-picker-schema";
 
-export const nativeSettingsSchema = settingsSchema.omit({
-  codexModels: true,
-  claudeModels: true,
-});
+export const nativeSettingsSchema = settingsSchema
+  .omit({
+    codexModels: true,
+    claudeModels: true,
+    opencodeModels: true,
+    piModels: true,
+  })
+  .extend({
+    opencodeEnabled: settingsSchema.shape.opencodeEnabled.removeDefault(),
+    piEnabled: settingsSchema.shape.piEnabled.removeDefault(),
+  });
 export class ModelSettings {
   constructor(
     private store: Store,
