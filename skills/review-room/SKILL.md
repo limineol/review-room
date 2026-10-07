@@ -5,7 +5,7 @@ description: Run an agent-controlled adversarial review after significant change
 
 # Review Room
 
-The agent in the current chat owns the review loop. Review Room shows progress and routes dialogue. Its Request review button is a natural-language request to this chat, not a separate human-operated runner.
+The agent in the current chat owns the review loop. Review Room shows progress and routes dialogue. The overview shows review cards; each review opens as a conversation. Reviews are started by the chat agent, with no launch button in the panel.
 
 1. Call `review_discover` to see installed harnesses and the combinations allowed by the user's native plugin settings. Choose one or more complementary reviewers from `enabled`. Prefer a different harness from the implementation agent when possible. Do not ask the user to select models for every review or silently substitute an unapproved model. If no combinations are enabled, explain how to enable them in Review Room's plugin settings. Do not enable models on the user's behalf without authorization.
 2. Call `review_prompt_guide`. Write the review prompt yourself: intended behavior, actual repository path, changed files or comparison ref, constraints, and risks to investigate. A checkpoint means "review now"; no frozen snapshot is created. Reviewers inspect live code. Avoid changing the same code while they review it, or explicitly tell them what changed and ask them to recheck.

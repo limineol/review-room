@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -9,36 +9,63 @@
     </style>
   </head>
   <body>
-    <header>
-      <span id="status">No active review</span
-      ><button id="request" class="primary">Request review</button>
-    </header>
-    <nav>
-      <select id="history" aria-label="Review history">
-        <option value="">Choose a review</option>
-      </select>
-    </nav>
-    <p id="error" role="alert"></p>
-    <section id="empty">
-      <p>
-        Reviews run through the agent in your chat. Their progress and
-        discussion appear here.
-      </p>
-      <p class="muted">
-        Allowed harnesses, models, and session reuse are configured in Review
-        Room’s plugin settings.
-      </p>
-    </section>
-    <section id="discussion" hidden>
-      <div class="review-toolbar">
-        <span id="participants"></span><button id="stop">Stop review</button>
-      </div>
-      <div id="messages" role="log" aria-live="polite"></div>
-      <p id="artifact" class="muted"></p>
-      <p class="muted">
-        Ask questions and request follow-ups in the main chat.
-      </p>
-    </section>
+    <main id="room">
+      <section id="overview" aria-labelledby="overview-title">
+        <header class="overview-header">
+          <div>
+            <h1 id="overview-title">Your reviews</h1>
+            <p id="overview-meta" class="muted">Loading reviews…</p>
+          </div>
+          <div id="overview-actions"></div>
+        </header>
+        <label class="search-field" id="review-search-field"
+          ><span class="sr-only">Search reviews</span
+          ><input
+            id="review-search"
+            type="search"
+            placeholder="Search reviews"
+            autocomplete="off"
+        /></label>
+        <p id="overview-error" class="error" role="alert"></p>
+        <div id="cards" class="review-grid" aria-label="Reviews"></div>
+        <div id="empty" class="empty-state" hidden>
+          <div id="empty-icon"></div>
+          <h2 id="empty-title">No reviews yet</h2>
+          <p id="empty-description">
+            Reviews started in your chat will appear here.
+          </p>
+        </div>
+      </section>
+      <section id="discussion" aria-labelledby="review-title" hidden>
+        <header class="discussion-header">
+          <div class="review-heading">
+            <div id="back-control"></div>
+            <div class="review-heading-text">
+              <h1 id="review-title" tabindex="-1"></h1>
+              <p id="review-meta" class="muted"></p>
+            </div>
+            <div id="review-status"></div>
+            <div id="review-actions"></div>
+          </div>
+          <div id="participants" class="participants"></div>
+          <p id="discussion-error" class="error" role="alert"></p>
+        </header>
+        <div
+          id="messages"
+          class="conversation"
+          role="log"
+          aria-label="Review discussion"
+          aria-live="polite"
+          aria-relevant="additions"
+        ></div>
+        <footer class="discussion-footer">
+          <details id="artifact" hidden>
+            <summary></summary>
+            <code></code>
+          </details>
+        </footer>
+      </section>
+    </main>
     <script type="module">
       /*SCRIPT*/
     </script>

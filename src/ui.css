@@ -1,0 +1,219 @@
+:root {
+  color-scheme: light;
+  font-family: var(
+    --font-sans,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif
+  );
+  font-size: 14px;
+  color: var(--color-text-primary, light-dark(#242424, #ececec));
+  background: var(--color-background-primary, light-dark(#fff, #212121));
+  --surface: var(--color-background-secondary, light-dark(#f6f6f6, #2b2b2b));
+  --muted: var(--color-text-secondary, light-dark(#6d6d6d, #aaa));
+  --line: var(--color-border-secondary, light-dark(#e9e9e9, #383838));
+  --ink: var(--color-text-primary, light-dark(#242424, #ececec));
+  --paper: var(--color-background-primary, light-dark(#fff, #212121));
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button,
+input,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+button:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--color-border-info, #6d91b6);
+  outline-offset: 3px;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+button {
+  border: 0;
+}
+.icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+}
+.icon svg {
+  width: 100%;
+  height: 100%;
+}
+.icon-button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.icon-button:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--ink);
+}
+.primary {
+  padding: 10px 17px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 9px;
+  font-weight: 550;
+  line-height: 20px;
+  transition: opacity 0.15s;
+}
+.primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
+.avatar {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.avatar svg {
+  width: 19px;
+  height: 19px;
+}
+.avatar.claude {
+  color: light-dark(#a45338, #e4a58b);
+  background: light-dark(#f8eee9, #382d28);
+}
+.avatar.codex {
+  background: light-dark(#efefed, #333331);
+}
+.avatar.agent {
+  background: light-dark(#eef1f4, #30363c);
+  color: light-dark(#607084, #afbed0);
+}
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.status-dot {
+  width: 5px;
+  height: 5px;
+  background: currentColor;
+  border-radius: 50%;
+}
+.status-badge.completed {
+  color: light-dark(#44745b, #91b8a1);
+}
+.status-badge.running,
+.status-badge.collecting {
+  color: light-dark(#4b759b, #9dbde0);
+}
+.status-badge.failed {
+  color: light-dark(#a54d48, #e6a09c);
+}
+.status-badge.partial,
+.status-badge.interrupted {
+  color: light-dark(#947039, #d6b67e);
+}
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 0 12px;
+  color: var(--muted);
+}
+.search-field:focus-within {
+  border-color: var(--color-border-primary, light-dark(#cfcfcf, #666));
+}
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 0;
+  line-height: 20px;
+  border: 0;
+  outline: none;
+  background: transparent;
+}
+.search-field input::placeholder {
+  color: var(--muted);
+}
+.error {
+  color: var(--color-text-danger, light-dark(#a54d48, #e6a09c));
+  font-size: 13px;
+  line-height: 1.5;
+}
+.error:empty {
+  display: none;
+}
+.muted {
+  color: var(--muted);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+[hidden] {
+  display: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

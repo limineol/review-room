@@ -3,30 +3,41 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Reviewer models</title>
     <style>
       /*STYLES*/
     </style>
   </head>
   <body>
-    <header>
-      <h1 id="title">Allowed reviewer models</h1>
-      <button id="refresh" disabled>Refresh</button>
-    </header>
-    <p>Choose the models the agent may use for reviews.</p>
-    <label class="search"
-      >Search models<input
-        id="search"
-        type="search"
-        placeholder="Search by name or description"
-        autocomplete="off"
-    /></label>
-    <p id="status" role="status">Loading model catalog…</p>
-    <p id="error" role="alert"></p>
-    <div id="choices"></div>
-    <footer>
-      <span id="count">0 selected</span
-      ><button id="save" disabled>Save selection</button>
-    </footer>
+    <main class="picker">
+      <header class="picker-header">
+        <div id="provider-icon"></div>
+        <div>
+          <h1 id="title">Reviewer models</h1>
+          <p>Choose which models can review your work.</p>
+        </div>
+      </header>
+      <div class="picker-toolbar">
+        <label class="search-field" id="model-search-field"
+          ><span class="sr-only">Search models</span
+          ><input
+            id="search"
+            type="search"
+            placeholder="Search models"
+            autocomplete="off"
+        /></label>
+        <div id="refresh-control"></div>
+      </div>
+      <p id="error" class="error" role="alert"></p>
+      <div id="choices" role="group" aria-label="Allowed reviewer models"></div>
+      <footer class="picker-footer">
+        <div>
+          <span id="count">0 selected</span>
+          <p id="status" role="status">Loading models…</p>
+        </div>
+        <button id="save" class="primary" disabled>Save changes</button>
+      </footer>
+    </main>
     <script type="module">
       /*SCRIPT*/
     </script>

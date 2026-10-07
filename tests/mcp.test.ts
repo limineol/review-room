@@ -67,7 +67,9 @@ test("native settings, agent tools, and observational panel are discoverable", a
     });
     const first = resource.contents[0];
     const html = first && "text" in first ? first.text : "";
-    expect(html).toContain("Request review");
+    expect(html).not.toContain("Request review");
+    expect(html).not.toContain('id="history"');
+    expect(html).toContain('id="cards"');
     expect(html).not.toContain('id="repo"');
     expect(html).not.toContain('id="rounds"');
     const script = html.match(

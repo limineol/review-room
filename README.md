@@ -2,11 +2,11 @@
 
 A native Codex plugin for agent-controlled adversarial reviews. The agent in your chat discovers enabled local models, writes review prompts, launches reviewers, discusses their findings, collects a Markdown artifact, and implements appropriate feedback within your task's scope.
 
-The discussion panel shows progress and dialogue. **Request review** sends a request to the current chat agent. There is no review-configuration form or second chat composer in the panel.
+The overview shows reviews as cards. Open a card for a conversation with reviewer icons, formatted message bubbles, an expandable review brief, and grouped activity updates. Start reviews and send follow-ups through the agent in your chat.
 
 ## Native settings
 
-Open the plugin's Settings to enable Codex and/or Claude Code. **Choose Codex models…** and **Choose Claude models…** open searchable checkbox pickers with names and descriptions from each harness's model catalog. Save the selection to allow those models. Discovery uses Codex app-server `model/list` and Claude's initialization catalog without running a model turn. It does not promise account access.
+Open the plugin's Settings to enable Codex and/or Claude Code. **Choose Codex models…** and **Choose Claude models…** open searchable checkbox pickers with names and descriptions from each harness's model catalog. **Save changes** allows those models and asks the host to close the picker. Hosts without the close extension show a saved confirmation. Discovery uses Codex app-server `model/list` and Claude's initialization catalog without running a model turn. It does not promise account access.
 
 Catalogs are cached for one minute; Refresh requests an update. A failed refresh retains the last catalog and existing selections. Previously selected models absent from the current catalog remain visible and may be deselected. Model identifiers are stored internally; refreshing never enables a model automatically.
 

@@ -25,6 +25,7 @@ for (const view of ["panel", "model-picker"]) {
     entrypoints: [`src/${view}.ts`],
     target: "browser",
     minify: true,
+    loader: { ".svg": "text" },
   });
   if (!bundle.success || !bundle.outputs[0])
     throw new AggregateError(bundle.logs, `${view} build failed`);
@@ -32,7 +33,10 @@ for (const view of ["panel", "model-picker"]) {
     "</script",
     "<\\/script",
   );
-  const styles = css + (await readFile(`src/${view}.css`, "utf8"));
+  const styles =
+    css +
+    (await readFile("src/ui.css", "utf8")) +
+    (await readFile(`src/${view}.css`, "utf8"));
   const html = (await readFile(`src/${view}.html`, "utf8"))
     .replace("/*SCRIPT*/", () => script)
     .replace("/*STYLES*/", () => styles);

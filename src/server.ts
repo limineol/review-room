@@ -24,7 +24,7 @@ import {
 } from "./schema";
 import { ModelSettings, nativeSettingsSchema } from "./model-settings";
 import { harnessId } from "./model-picker-schema";
-const version = "0.2.1";
+const version = "0.3.0";
 const server = new McpServer({ name: "review-room", version });
 const extensions = new OpenAIExtensions(server);
 const store = new Store(process.env.REVIEW_ROOM_DB);
@@ -110,7 +110,17 @@ const pickerHtml = await readFile(
 );
 registerAppResource(server, "model-picker", pickerUri, {}, async () => ({
   contents: [
-    { uri: pickerUri, mimeType: RESOURCE_MIME_TYPE, text: pickerHtml },
+    {
+      uri: pickerUri,
+      mimeType: RESOURCE_MIME_TYPE,
+      text: pickerHtml,
+      _meta: {
+        "openai/ui": {
+          preferredDisplayMode: "fullscreen",
+          availableDisplayModes: ["fullscreen"],
+        } satisfies OpenAIUiResourceMetadata,
+      },
+    },
   ],
 }));
 for (const harness of ["codex", "claude"] as const) {

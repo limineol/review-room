@@ -1,6 +1,6 @@
 {
   "name": "review-room",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Agent-controlled adversarial reviews with local harnesses and a native discussion panel.",
   "author": {
     "name": "Dani"
@@ -11,7 +11,11 @@
     "longDescription": "The chat agent selects enabled reviewers, prompts them to read code, discusses findings, and collects review artifacts. Review Room shows progress and peer dialogue; native settings control harnesses, models, and session reuse.",
     "developerName": "Dani",
     "category": "Developer Tools",
-    "capabilities": ["Interactive", "Read", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
     "logo": "./assets/icon.svg",
     "composerIcon": "./assets/icon.svg",
     "defaultPrompt": "Run an adversarial review of my current changes using Review Room."
