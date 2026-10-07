@@ -9,7 +9,7 @@ import {
   reviewDate,
 } from "./panel-view";
 
-const app = new App({ name: "Review Room", version: "0.3.0" });
+const app = new App({ name: "Review Room", version: "0.3.1" });
 const get = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const refreshButton = iconButton("refresh", "Refresh reviews");

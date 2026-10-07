@@ -152,7 +152,6 @@ function messageBubble(message: Message, run: Run, isBrief: boolean) {
   content.append(byline);
   if (isBrief) {
     const brief = el("details", "message-bubble brief");
-    brief.dataset.key = `brief-${message.id}`;
     const summary = el("summary");
     summary.append(icon("file"), el("span", "", "Review brief"), icon("arrow"));
     brief.append(summary, markdown(message.text));

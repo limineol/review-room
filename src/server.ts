@@ -24,7 +24,7 @@ import {
 } from "./schema";
 import { ModelSettings, nativeSettingsSchema } from "./model-settings";
 import { harnessId } from "./model-picker-schema";
-const version = "0.3.0";
+const version = "0.3.1";
 const server = new McpServer({ name: "review-room", version });
 const extensions = new OpenAIExtensions(server);
 const store = new Store(process.env.REVIEW_ROOM_DB);

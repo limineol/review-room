@@ -8,7 +8,7 @@ declare global {
     openai?: { requestClose?: () => void | Promise<void> };
   }
 }
-const app = new App({ name: "Review Room model picker", version: "0.3.0" });
+const app = new App({ name: "Review Room model picker", version: "0.3.1" });
 const get = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const refreshButton = iconButton("refresh", "Refresh models");
@@ -20,7 +20,6 @@ let busy = false;
 function render() {
   get<HTMLButtonElement>("save").disabled = busy || !state;
   refreshButton.disabled = busy || !state;
-  refreshButton.classList.toggle("refreshing", busy);
   get("count").textContent = `${selected.size} selected`;
   if (!state) return;
   get("title").textContent =

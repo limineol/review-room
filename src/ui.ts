@@ -21,15 +21,13 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 const paths = {
   back: '<path d="m14 5-7 7 7 7M7 12h14"/>',
   arrow: '<path d="m9 5 7 7-7 7"/>',
-  refresh:
-    '<path d="M20 7v5h-5M4 17v-5h5M5.3 7a8 8 0 0 1 13.2-1L20 8M4 16l1.5 2A8 8 0 0 0 18.7 17"/>',
+  refresh: '<path d="M20 12a8 8 0 1 1-2.34-5.66L20 8M20 3v5h-5"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
   folder:
     '<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
   chat: '<path d="M20 11.5a8 8 0 0 1-8 8 9 9 0 0 1-3.5-.7L4 20l1.2-4.5a9 9 0 0 1-.7-3.5 8 8 0 0 1 15.5-.5Z"/><path d="M8 10h8M8 14h5"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
   file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9ZM14 3v6h6M8 13h8M8 17h5"/>',
-  check: '<path d="m5 12 4 4L19 6"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 } as const;
 export function icon(name: keyof typeof paths) {
@@ -59,19 +57,20 @@ export function modelName(model: string) {
       .replace(/^gpt-/, "GPT-")
       .replace(
         /-(sol|astra|luna|terra)$/i,
-        (_, family: string) => ` ${family[0]?.toUpperCase()}${family.slice(1)}`,
+        (_, family: string) =>
+          ` ${family.charAt(0).toUpperCase()}${family.slice(1)}`,
       );
   if (model.startsWith("claude-"))
     return model
       .replace(/^claude-/, "")
       .split("-")
       .map((word, index) =>
-        index === 0 ? word[0]?.toUpperCase() + word.slice(1) : word,
+        index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word,
       )
       .join(" ")
       .replace(/(\d) (\d)/g, "$1.$2");
   if (["opus", "sonnet", "haiku", "fable", "default"].includes(model))
-    return model[0]?.toUpperCase() + model.slice(1);
+    return model.charAt(0).toUpperCase() + model.slice(1);
   return model;
 }
 export const statusLabels: Record<Run["status"], string> = {
